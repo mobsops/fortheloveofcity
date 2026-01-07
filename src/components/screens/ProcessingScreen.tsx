@@ -2,6 +2,8 @@ import { useState, useEffect, useCallback } from 'react';
 import { TerminalText } from '@/components/TerminalText';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
+import { Button } from '@/components/ui/button';
+import { RefreshCw } from 'lucide-react';
 
 interface ProcessingScreenProps {
   photos: File[];
@@ -17,26 +19,15 @@ interface ProcessingMessage {
 }
 
 const PROCESSING_MESSAGES: ProcessingMessage[] = [
-  { text: "INITIALIZING TEMPORAL SCANNERS...", delay: 2000 },
-  { text: "ANALYZING ARCHITECTURAL SIGNATURES...", delay: 2500 },
-  { text: "RETRIEVING DATA FROM TIME CAPSULE...", delay: 3000 },
-  { text: "CONNECTING TO FUTURE NEXUS...", delay: 2500 },
-  { text: "ANALYZING TEMPORAL FINGERPRINTS...", delay: 3000 },
-  { text: "CROSS-REFERENCING HISTORICAL DATABASE...", delay: 2500 },
-  { text: "⚠ CONNECTION UNSTABLE...", delay: 2000, warning: true },
-  { text: "RECALIBRATING TEMPORAL BRIDGE...", delay: 3000 },
+  { text: "INITIALIZING TEMPORAL SCANNERS...", delay: 1500 },
+  { text: "ANALYZING ARCHITECTURAL SIGNATURES...", delay: 2000 },
+  { text: "CONNECTING TO FUTURE NEXUS...", delay: 2000 },
+  { text: "CROSS-REFERENCING HISTORICAL DATABASE...", delay: 2000 },
 ];
 
 const FINAL_MESSAGES: ProcessingMessage[] = [
-  { text: "CONNECTION STABILIZED.", delay: 1500, success: true },
-  { text: "RECONSTRUCTING TIMELINE...", delay: 2000 },
-  { text: "VIDEO RECONSTRUCTION COMPLETE.", delay: 1500, success: true },
-];
-
-const ERROR_MESSAGES: ProcessingMessage[] = [
-  { text: "CONNECTION FAILED. RETRYING...", delay: 2500, error: true },
-  { text: "THIS MAY TAKE 2-3 MINUTES...", delay: 3000, error: true },
-  { text: "STABILIZING QUANTUM LINK...", delay: 4000 },
+  { text: "CONNECTION STABILIZED.", delay: 1000, success: true },
+  { text: "RECONSTRUCTION COMPLETE.", delay: 1000, success: true },
 ];
 
 export const ProcessingScreen = ({ photos, onComplete }: ProcessingScreenProps) => {
@@ -46,10 +37,13 @@ export const ProcessingScreen = ({ photos, onComplete }: ProcessingScreenProps) 
   const [transformedImages, setTransformedImages] = useState<string[] | null>(null);
   const [apiError, setApiError] = useState(false);
   const [isProcessing, setIsProcessing] = useState(true);
+  const [showRetry, setShowRetry] = useState(false);
 
   // Convert photos to base64 and call API
   const processPhotos = useCallback(async () => {
     try {
+      setApiError(false);
+      setShowRetry(false);
       console.log('Converting photos to base64...');
       const base64Images: string[] = [];
       
@@ -71,86 +65,100 @@ export const ProcessingScreen = ({ photos, onComplete }: ProcessingScreenProps) 
       if (error) {
         console.error('API error:', error);
         setApiError(true);
-        toast.error('Temporal reconstruction failed. Using fallback imagery.');
+        setShowRetry(true);
+        toast.error('Temporal reconstruction failed.');
         return base64Images; // Return original images as fallback
       }
 
       if (data?.transformedImages) {
-        console.log('Transformation successful!');
+        console.log('Transformation successful!', data.transformedImages.length, 'images');
         return data.transformedImages;
       }
 
-      return base64Images; // Fallback to originals
+      console.log('No transformed images in response, using originals');
+      return base64Images;
     } catch (err) {
       console.error('Processing error:', err);
       setApiError(true);
+      setShowRetry(true);
       toast.error('Connection to future nexus failed.');
       return null;
     }
   }, [photos]);
 
-  // Start API call when component mounts
-  useEffect(() => {
+  // Start API call
+  const startProcessing = useCallback(() => {
+    setCurrentMessageIndex(0);
+    setDisplayedMessages([]);
+    setProgress(0);
+    setTransformedImages(null);
+    setIsProcessing(true);
+    
     processPhotos().then(images => {
-      if (images) {
+      if (images && images.length > 0) {
+        console.log('Setting transformed images:', images.length);
         setTransformedImages(images);
       }
     });
   }, [processPhotos]);
 
+  // Start on mount
+  useEffect(() => {
+    startProcessing();
+  }, []);
+
   // Message progression effect
   useEffect(() => {
     if (!isProcessing) return;
 
-    // Determine which messages to show based on state
-    const allMessages = transformedImages 
-      ? [...PROCESSING_MESSAGES, ...FINAL_MESSAGES]
-      : apiError 
-        ? [...PROCESSING_MESSAGES, ...ERROR_MESSAGES, ...FINAL_MESSAGES]
-        : PROCESSING_MESSAGES;
+    const allMessages = [...PROCESSING_MESSAGES, ...FINAL_MESSAGES];
+    const canShowFinalMessages = transformedImages !== null;
 
-    if (currentMessageIndex < allMessages.length) {
-      const message = allMessages[currentMessageIndex];
+    // Only show processing messages until we have images
+    const messagesToShow = canShowFinalMessages 
+      ? allMessages 
+      : PROCESSING_MESSAGES;
+
+    if (currentMessageIndex < messagesToShow.length) {
+      const message = messagesToShow[currentMessageIndex];
       
-      // Add message to displayed list
       setDisplayedMessages(prev => [...prev, message]);
-      
-      // Update progress
       setProgress(((currentMessageIndex + 1) / allMessages.length) * 100);
       
-      // Schedule next message
       const timer = setTimeout(() => {
         setCurrentMessageIndex(prev => prev + 1);
       }, message.delay);
 
       return () => clearTimeout(timer);
-    } else if (transformedImages) {
-      // All messages complete and we have images - proceed!
-      console.log('Processing complete, transitioning with images:', transformedImages.length);
+    } else if (transformedImages && currentMessageIndex >= allMessages.length) {
+      // All messages shown and we have images - transition!
+      console.log('All messages complete, calling onComplete');
       setIsProcessing(false);
-      const timer = setTimeout(() => {
-        onComplete(transformedImages);
-      }, 1000);
-      return () => clearTimeout(timer);
+      setProgress(100);
+      onComplete(transformedImages);
     }
-  }, [currentMessageIndex, transformedImages, apiError, isProcessing, onComplete]);
+  }, [currentMessageIndex, transformedImages, isProcessing, onComplete]);
 
-  // Keep showing waiting messages while API is processing
+  // Show waiting indicator if API is slow
   useEffect(() => {
-    if (transformedImages || !isProcessing) return; // Exit if we have images or not processing
+    if (transformedImages || !isProcessing) return;
     
     if (currentMessageIndex >= PROCESSING_MESSAGES.length) {
-      // Show waiting message every 3 seconds while API works
       const timer = setTimeout(() => {
         setDisplayedMessages(prev => [...prev, {
           text: "STABILIZING QUANTUM LINK...",
-          delay: 3000,
+          delay: 2000,
+          warning: true,
         }]);
       }, 3000);
       
       return () => clearTimeout(timer);
     }
   }, [transformedImages, currentMessageIndex, isProcessing, displayedMessages.length]);
+
+  const handleRetry = () => {
+    startProcessing();
+  };
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center p-6">
@@ -204,6 +212,20 @@ export const ProcessingScreen = ({ photos, onComplete }: ProcessingScreenProps) 
             />
           </div>
         </div>
+
+        {/* Retry Button */}
+        {showRetry && (
+          <div className="text-center mb-6">
+            <Button
+              variant="terminal"
+              onClick={handleRetry}
+              className="gap-2"
+            >
+              <RefreshCw className="w-4 h-4" />
+              RETRY TEMPORAL CONNECTION
+            </Button>
+          </div>
+        )}
 
         {/* Data Stream Effect */}
         <div className="h-20 relative overflow-hidden rounded border border-primary/20">
