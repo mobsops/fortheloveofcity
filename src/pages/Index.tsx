@@ -19,6 +19,7 @@ const Index = () => {
   const [gameState, setGameState] = useState<GameState>('username');
   const [username, setUsername] = useState('');
   const [photos, setPhotos] = useState<File[]>([]);
+  const [transformedImages, setTransformedImages] = useState<string[]>([]);
 
   const handleUsernameSubmit = (name: string) => {
     setUsername(name);
@@ -30,7 +31,8 @@ const Index = () => {
     setGameState('processing');
   };
 
-  const handleProcessingComplete = () => {
+  const handleProcessingComplete = (images: string[]) => {
+    setTransformedImages(images);
     setGameState('video-reveal');
   };
 
@@ -45,6 +47,7 @@ const Index = () => {
   const handleRestart = () => {
     setUsername('');
     setPhotos([]);
+    setTransformedImages([]);
     setGameState('username');
   };
 
@@ -65,11 +68,17 @@ const Index = () => {
         )}
         
         {gameState === 'processing' && (
-          <ProcessingScreen onComplete={handleProcessingComplete} />
+          <ProcessingScreen 
+            photos={photos} 
+            onComplete={handleProcessingComplete} 
+          />
         )}
         
         {gameState === 'video-reveal' && (
-          <VideoRevealScreen onConfirm={handleConfirmMission} />
+          <VideoRevealScreen 
+            transformedImages={transformedImages}
+            onConfirm={handleConfirmMission} 
+          />
         )}
         
         {gameState === 'game' && (
