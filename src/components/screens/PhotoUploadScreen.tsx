@@ -12,6 +12,7 @@ export const PhotoUploadScreen = ({ username, onSubmit }: PhotoUploadScreenProps
   const [photos, setPhotos] = useState<File[]>([]);
   const [previews, setPreviews] = useState<string[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const cameraInputRef = useRef<HTMLInputElement>(null);
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []);
@@ -35,10 +36,12 @@ export const PhotoUploadScreen = ({ username, onSubmit }: PhotoUploadScreenProps
   };
 
   const handleSubmit = () => {
-    if (photos.length > 0) {
+    if (photos.length >= 2) {
       onSubmit(photos);
     }
   };
+
+  const canSubmit = photos.length >= 2;
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center p-6">
@@ -52,18 +55,27 @@ export const PhotoUploadScreen = ({ username, onSubmit }: PhotoUploadScreenProps
             CAPTURE YOUR REALITY
           </h2>
           <p className="text-muted-foreground text-sm max-w-md mx-auto">
-            Upload photos of your surroundings—buildings, streets, landmarks. 
-            These will be analyzed to reconstruct the temporal origin point.
+            Upload <span className="text-primary font-semibold">at least 2 photos</span> of your surroundings—buildings, streets, landmarks. 
+            You can add up to 4 for better temporal reconstruction.
           </p>
         </div>
 
         {/* Upload Area */}
         <div className="terminal-box p-6 mb-6">
+          {/* Hidden file inputs */}
           <input
             ref={fileInputRef}
             type="file"
             accept="image/*"
             multiple
+            onChange={handleFileSelect}
+            className="hidden"
+          />
+          <input
+            ref={cameraInputRef}
+            type="file"
+            accept="image/*"
+            capture="environment"
             onChange={handleFileSelect}
             className="hidden"
           />
@@ -77,7 +89,9 @@ export const PhotoUploadScreen = ({ username, onSubmit }: PhotoUploadScreenProps
                   "aspect-video rounded border-2 border-dashed relative overflow-hidden transition-all duration-300",
                   previews[index] 
                     ? "border-primary/50 glow-border-cyan" 
-                    : "border-muted-foreground/30 hover:border-primary/30"
+                    : index < 2 
+                      ? "border-warning/50 hover:border-warning/70" 
+                      : "border-muted-foreground/30 hover:border-primary/30"
                 )}
               >
                 {previews[index] ? (
@@ -98,20 +112,29 @@ export const PhotoUploadScreen = ({ username, onSubmit }: PhotoUploadScreenProps
                     </div>
                   </>
                 ) : (
-                  <button
-                    onClick={() => fileInputRef.current?.click()}
-                    className="absolute inset-0 flex flex-col items-center justify-center text-muted-foreground hover:text-primary transition-colors"
-                  >
+                  <div className="absolute inset-0 flex flex-col items-center justify-center text-muted-foreground">
                     <Camera className="w-8 h-8 mb-2 opacity-50" />
-                    <span className="text-xs tracking-wider">SLOT_{index + 1}</span>
-                  </button>
+                    <span className="text-xs tracking-wider">
+                      {index < 2 ? 'REQUIRED' : 'OPTIONAL'}
+                    </span>
+                    <span className="text-[10px] opacity-60">SLOT_{index + 1}</span>
+                  </div>
                 )}
               </div>
             ))}
           </div>
 
           {/* Action Buttons */}
-          <div className="flex gap-4">
+          <div className="flex flex-col sm:flex-row gap-3">
+            <Button
+              variant="terminal"
+              onClick={() => cameraInputRef.current?.click()}
+              className="flex-1"
+              disabled={photos.length >= 4}
+            >
+              <Camera className="w-4 h-4 mr-2" />
+              TAKE PHOTO
+            </Button>
             <Button
               variant="terminal"
               onClick={() => fileInputRef.current?.click()}
@@ -119,25 +142,38 @@ export const PhotoUploadScreen = ({ username, onSubmit }: PhotoUploadScreenProps
               disabled={photos.length >= 4}
             >
               <Upload className="w-4 h-4 mr-2" />
-              ADD PHOTOS
-            </Button>
-            <Button
-              variant="terminal"
-              onClick={handleSubmit}
-              className="flex-1"
-              disabled={photos.length === 0}
-            >
-              <Check className="w-4 h-4 mr-2" />
-              ANALYZE ({photos.length}/4)
+              UPLOAD
             </Button>
           </div>
+
+          {/* Submit Button */}
+          <Button
+            variant={canSubmit ? "success" : "terminal"}
+            onClick={handleSubmit}
+            className="w-full mt-4"
+            disabled={!canSubmit}
+          >
+            <Check className="w-4 h-4 mr-2" />
+            {canSubmit 
+              ? `ANALYZE ${photos.length} PHOTO${photos.length > 1 ? 'S' : ''}` 
+              : `NEED ${2 - photos.length} MORE PHOTO${2 - photos.length > 1 ? 'S' : ''}`
+            }
+          </Button>
         </div>
 
         {/* Status */}
         <div className="text-center text-xs text-muted-foreground/60 font-mono">
           <div className="flex items-center justify-center gap-2">
-            <span className="w-2 h-2 rounded-full bg-secondary animate-pulse" />
-            <span>AWAITING ENVIRONMENTAL DATA</span>
+            <span className={cn(
+              "w-2 h-2 rounded-full",
+              canSubmit ? "bg-success" : "bg-warning animate-pulse"
+            )} />
+            <span>
+              {canSubmit 
+                ? "ENVIRONMENTAL DATA READY" 
+                : "AWAITING MINIMUM 2 SCANS"
+              }
+            </span>
           </div>
         </div>
       </div>
