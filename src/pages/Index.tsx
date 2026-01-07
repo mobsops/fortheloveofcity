@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { ScanlineOverlay } from '@/components/ScanlineOverlay';
 import { UsernameScreen } from '@/components/screens/UsernameScreen';
 import { PhotoUploadScreen } from '@/components/screens/PhotoUploadScreen';
@@ -6,9 +6,12 @@ import { ProcessingScreen } from '@/components/screens/ProcessingScreen';
 import { VideoRevealScreen } from '@/components/screens/VideoRevealScreen';
 import { GameScreen } from '@/components/screens/GameScreen';
 import { CompletionScreen } from '@/components/screens/CompletionScreen';
+import { WelcomeBackScreen } from '@/components/screens/WelcomeBackScreen';
+import { useGameSession } from '@/hooks/useGameSession';
 
 type GameState = 
   | 'username'
+  | 'welcome-back'
   | 'photo-upload'
   | 'processing'
   | 'video-reveal'
@@ -20,9 +23,33 @@ const Index = () => {
   const [username, setUsername] = useState('');
   const [photos, setPhotos] = useState<File[]>([]);
   const [transformedImages, setTransformedImages] = useState<string[]>([]);
+  const { session, loadSession, resetSession, setSession } = useGameSession();
 
-  const handleUsernameSubmit = (name: string) => {
+  const handleUsernameSubmit = async (name: string) => {
     setUsername(name);
+    
+    // Check for existing session
+    const { isReturning, session: loadedSession } = await loadSession(name);
+    
+    if (isReturning && loadedSession && loadedSession.current_level > 1) {
+      // User has made progress - show welcome back screen
+      setGameState('welcome-back');
+    } else if (isReturning && loadedSession && loadedSession.current_level === 1 && loadedSession.current_phase !== 'decryption') {
+      // User started level 1 extraction
+      setGameState('welcome-back');
+    } else {
+      // New user or no progress - start fresh
+      setGameState('photo-upload');
+    }
+  };
+
+  const handleResumeSession = () => {
+    // Go directly to game with saved progress
+    setGameState('game');
+  };
+
+  const handleRestartSession = async () => {
+    await resetSession();
     setGameState('photo-upload');
   };
 
@@ -44,10 +71,11 @@ const Index = () => {
     setGameState('complete');
   };
 
-  const handleRestart = () => {
+  const handleRestart = async () => {
     setUsername('');
     setPhotos([]);
     setTransformedImages([]);
+    await resetSession();
     setGameState('username');
   };
 
@@ -58,6 +86,16 @@ const Index = () => {
       <main className="relative z-10">
         {gameState === 'username' && (
           <UsernameScreen onSubmit={handleUsernameSubmit} />
+        )}
+        
+        {gameState === 'welcome-back' && session && (
+          <WelcomeBackScreen
+            username={username}
+            currentLevel={session.current_level}
+            currentPhase={session.current_phase as 'decryption' | 'extraction'}
+            onResume={handleResumeSession}
+            onRestart={handleRestartSession}
+          />
         )}
         
         {gameState === 'photo-upload' && (
@@ -84,7 +122,10 @@ const Index = () => {
         {gameState === 'game' && (
           <GameScreen 
             username={username} 
-            onComplete={handleGameComplete} 
+            onComplete={handleGameComplete}
+            initialLevel={session?.current_level || 1}
+            initialPhase={(session?.current_phase as 'decryption' | 'extraction') || 'decryption'}
+            initialCompletedLevels={session?.completed_levels || []}
           />
         )}
         

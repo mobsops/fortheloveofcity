@@ -16,7 +16,7 @@ export const PhotoUploadScreen = ({ username, onSubmit }: PhotoUploadScreenProps
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []);
-    const newPhotos = [...photos, ...files].slice(0, 4);
+    const newPhotos = [...photos, ...files].slice(0, 2); // Limit to 2 photos
     setPhotos(newPhotos);
     
     // Generate previews
@@ -36,12 +36,12 @@ export const PhotoUploadScreen = ({ username, onSubmit }: PhotoUploadScreenProps
   };
 
   const handleSubmit = () => {
-    if (photos.length >= 2) {
+    if (photos.length === 2) {
       onSubmit(photos);
     }
   };
 
-  const canSubmit = photos.length >= 2;
+  const canSubmit = photos.length === 2;
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center p-6">
@@ -55,8 +55,8 @@ export const PhotoUploadScreen = ({ username, onSubmit }: PhotoUploadScreenProps
             CAPTURE YOUR REALITY
           </h2>
           <p className="text-muted-foreground text-sm max-w-md mx-auto">
-            Upload <span className="text-primary font-semibold">at least 2 photos</span> of your surroundings—buildings, streets, landmarks. 
-            You can add up to 4 for better temporal reconstruction.
+            Upload <span className="text-primary font-semibold">exactly 2 photos</span> of your surroundings—buildings, streets, landmarks. 
+            Both will be transformed into the apocalyptic future.
           </p>
         </div>
 
@@ -80,18 +80,16 @@ export const PhotoUploadScreen = ({ username, onSubmit }: PhotoUploadScreenProps
             className="hidden"
           />
 
-          {/* Photo Grid */}
+          {/* Photo Grid - Only 2 slots */}
           <div className="grid grid-cols-2 gap-4 mb-6">
-            {[0, 1, 2, 3].map((index) => (
+            {[0, 1].map((index) => (
               <div 
                 key={index}
                 className={cn(
                   "aspect-video rounded border-2 border-dashed relative overflow-hidden transition-all duration-300",
                   previews[index] 
                     ? "border-primary/50 glow-border-cyan" 
-                    : index < 2 
-                      ? "border-warning/50 hover:border-warning/70" 
-                      : "border-muted-foreground/30 hover:border-primary/30"
+                    : "border-warning/50 hover:border-warning/70"
                 )}
               >
                 {previews[index] ? (
@@ -114,9 +112,7 @@ export const PhotoUploadScreen = ({ username, onSubmit }: PhotoUploadScreenProps
                 ) : (
                   <div className="absolute inset-0 flex flex-col items-center justify-center text-muted-foreground">
                     <Camera className="w-8 h-8 mb-2 opacity-50" />
-                    <span className="text-xs tracking-wider">
-                      {index < 2 ? 'REQUIRED' : 'OPTIONAL'}
-                    </span>
+                    <span className="text-xs tracking-wider">REQUIRED</span>
                     <span className="text-[10px] opacity-60">SLOT_{index + 1}</span>
                   </div>
                 )}
@@ -130,7 +126,7 @@ export const PhotoUploadScreen = ({ username, onSubmit }: PhotoUploadScreenProps
               variant="terminal"
               onClick={() => cameraInputRef.current?.click()}
               className="flex-1"
-              disabled={photos.length >= 4}
+              disabled={photos.length >= 2}
             >
               <Camera className="w-4 h-4 mr-2" />
               TAKE PHOTO
@@ -139,7 +135,7 @@ export const PhotoUploadScreen = ({ username, onSubmit }: PhotoUploadScreenProps
               variant="terminal"
               onClick={() => fileInputRef.current?.click()}
               className="flex-1"
-              disabled={photos.length >= 4}
+              disabled={photos.length >= 2}
             >
               <Upload className="w-4 h-4 mr-2" />
               UPLOAD
@@ -155,7 +151,7 @@ export const PhotoUploadScreen = ({ username, onSubmit }: PhotoUploadScreenProps
           >
             <Check className="w-4 h-4 mr-2" />
             {canSubmit 
-              ? `ANALYZE ${photos.length} PHOTO${photos.length > 1 ? 'S' : ''}` 
+              ? 'ANALYZE 2 PHOTOS' 
               : `NEED ${2 - photos.length} MORE PHOTO${2 - photos.length > 1 ? 'S' : ''}`
             }
           </Button>
@@ -171,7 +167,7 @@ export const PhotoUploadScreen = ({ username, onSubmit }: PhotoUploadScreenProps
             <span>
               {canSubmit 
                 ? "ENVIRONMENTAL DATA READY" 
-                : "AWAITING MINIMUM 2 SCANS"
+                : "AWAITING 2 SCANS"
               }
             </span>
           </div>

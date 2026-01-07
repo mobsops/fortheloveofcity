@@ -1,327 +1,149 @@
-import { useState, useRef, useEffect } from 'react';
-import { Button } from '@/components/ui/button';
-import { MapPin, Camera, Check, Lock, Unlock, Navigation, AlertCircle } from 'lucide-react';
-import { cn } from '@/lib/utils';
-import { GlitchText } from '@/components/GlitchText';
+import { useState, useEffect } from 'react';
+import { DecryptionScreen } from './DecryptionScreen';
+import { ExtractionScreen } from './ExtractionScreen';
+import { useGameSession } from '@/hooks/useGameSession';
 
 interface Level {
   id: number;
   name: string;
   hint: string;
   riddle: string;
+  answer: string;
+  answerAliases: string[];
+  verificationKeywords: string[];
 }
 
+// Moscow-based levels with specific locations
 const LEVELS: Level[] = [
   { 
     id: 1, 
     name: "THE ORIGIN POINT",
-    hint: "Find where the city first breathed life—where stone meets sky in ancient greeting.",
-    riddle: "I stand where founders once stood, watching generations pass. Find me at dawn's first light."
+    hint: "Find where the city's heart beats strongest—where red walls touch the sky.",
+    riddle: "I stand where tsars once ruled, my walls painted in blood's own hue. Stars of ruby crown my towers. Find me where history began anew.",
+    answer: "Red Square",
+    answerAliases: ["kremlin", "krasnaya ploshchad", "красная площадь"],
+    verificationKeywords: ["kremlin", "cathedral", "wall"]
   },
   { 
     id: 2, 
     name: "THE FORGOTTEN ARCHIVE",
-    hint: "Seek the keeper of written memories, where silence speaks volumes.",
-    riddle: "Shelves of knowledge tower high, yet the answers lie in the oldest wing."
+    hint: "Seek the keeper of written memories, where Lenin's name lives on in books.",
+    riddle: "Columns of knowledge rise high, named for a revolutionary's cry. Millions of stories rest in my halls, where silence speaks through ancient walls.",
+    answer: "Lenin Library",
+    answerAliases: ["russian state library", "leninka", "библиотека ленина"],
+    verificationKeywords: ["library", "columns", "entrance"]
   },
   { 
     id: 3, 
     name: "THE CROSSROADS",
-    hint: "Where four paths meet and decisions are made, the timeline fractures most.",
-    riddle: "I am the heart of movement, where strangers cross without meeting eyes."
+    hint: "Where millions pass beneath the earth, art adorns the traveler's path.",
+    riddle: "I am a palace underground, where chandeliers illuminate the bound. Art meets function in my design, the most beautiful transit you'll find.",
+    answer: "Komsomolskaya Metro",
+    answerAliases: ["komsomolskaya", "metro station", "метро комсомольская"],
+    verificationKeywords: ["metro", "chandelier", "station"]
   },
   { 
     id: 4, 
     name: "THE MEMORIAL",
-    hint: "Honor those who shaped tomorrow—their sacrifice echoes through time.",
-    riddle: "In bronze and stone I remember, what flesh and blood could not forget."
+    hint: "Honor those who fell defending the motherland—victory eternal in stone.",
+    riddle: "I pierce the sky at one hundred and forty-one, honoring battles lost and won. Mother Motherland stands near, where victory echoes year after year.",
+    answer: "Victory Park",
+    answerAliases: ["park pobedy", "poklonnaya hill", "парк победы"],
+    verificationKeywords: ["obelisk", "memorial", "monument"]
   },
   { 
     id: 5, 
     name: "THE SANCTUARY",
-    hint: "Where souls find peace and architecture touches heaven.",
-    riddle: "Light filters through colored glass, painting stories on cold stone floors."
+    hint: "Where souls find peace in painted light—rebuilt from memory and faith.",
+    riddle: "Destroyed then risen from the ground, my golden domes are heaven-bound. The tallest Orthodox in the land, rebuilt by many faithful hands.",
+    answer: "Christ the Savior Cathedral",
+    answerAliases: ["cathedral of christ", "храм христа спасителя"],
+    verificationKeywords: ["cathedral", "dome", "gold"]
   },
   { 
     id: 6, 
     name: "THE WATCHTOWER",
-    hint: "Elevation reveals perspective—climb to see what others miss.",
-    riddle: "From my height, the city spreads like a map of human dreams."
+    hint: "Elevation reveals perspective—climb where broadcasts touch the stars.",
+    riddle: "Needle of steel I reach for space, the tallest view of Moscow's face. Four hundred meters to the sky, where radio waves and tourists fly.",
+    answer: "Ostankino Tower",
+    answerAliases: ["tv tower", "останкинская башня", "television tower"],
+    verificationKeywords: ["tower", "observation", "tall"]
   },
   { 
     id: 7, 
     name: "THE NEXUS",
-    hint: "Return to where it began, but with eyes that now see beyond.",
-    riddle: "Full circle brings new meaning. The end is always a beginning."
+    hint: "Return to where theater meets elegance—where culture dances through time.",
+    riddle: "Apollo rides above my stage, witness to drama through every age. Ballet and opera fill my halls, where the muse of art forever calls.",
+    answer: "Bolshoi Theatre",
+    answerAliases: ["bolshoi", "большой театр", "big theatre"],
+    verificationKeywords: ["theatre", "columns", "apollo"]
   },
 ];
 
 interface GameScreenProps {
   username: string;
   onComplete: () => void;
+  initialLevel?: number;
+  initialPhase?: 'decryption' | 'extraction';
+  initialCompletedLevels?: number[];
 }
 
-export const GameScreen = ({ username, onComplete }: GameScreenProps) => {
-  const [currentLevel, setCurrentLevel] = useState(1);
-  const [completedLevels, setCompletedLevels] = useState<number[]>([]);
-  const [locationVerified, setLocationVerified] = useState(false);
-  const [selfieUploaded, setSelfieUploaded] = useState(false);
-  const [isVerifyingLocation, setIsVerifyingLocation] = useState(false);
-  const [locationError, setLocationError] = useState<string | null>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
+export const GameScreen = ({ 
+  username, 
+  onComplete,
+  initialLevel = 1,
+  initialPhase = 'decryption',
+  initialCompletedLevels = []
+}: GameScreenProps) => {
+  const [currentLevel, setCurrentLevel] = useState(initialLevel);
+  const [phase, setPhase] = useState<'decryption' | 'extraction'>(initialPhase);
+  const [completedLevels, setCompletedLevels] = useState<number[]>(initialCompletedLevels);
+  const { updateSession } = useGameSession();
 
   const level = LEVELS[currentLevel - 1];
-  const isLevelComplete = locationVerified && selfieUploaded;
 
-  const verifyLocation = () => {
-    setIsVerifyingLocation(true);
-    setLocationError(null);
+  // Save progress when state changes
+  useEffect(() => {
+    updateSession(currentLevel, phase, completedLevels);
+  }, [currentLevel, phase, completedLevels]);
 
-    if ('geolocation' in navigator) {
-      navigator.geolocation.getCurrentPosition(
-        (position) => {
-          // In a real app, you'd verify coordinates against expected location
-          console.log('Location:', position.coords);
-          setLocationVerified(true);
-          setIsVerifyingLocation(false);
-        },
-        (error) => {
-          setLocationError('Location access denied. Please enable location services.');
-          setIsVerifyingLocation(false);
-        }
-      );
-    } else {
-      setLocationError('Geolocation not supported');
-      setIsVerifyingLocation(false);
-    }
+  const handleDecrypted = () => {
+    setPhase('extraction');
   };
 
-  const handleSelfieUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      setSelfieUploaded(true);
-    }
-  };
-
-  const completeLevel = () => {
-    setCompletedLevels(prev => [...prev, currentLevel]);
+  const handleExtracted = () => {
+    const newCompleted = [...completedLevels, currentLevel];
+    setCompletedLevels(newCompleted);
     
     if (currentLevel < 7) {
       setCurrentLevel(prev => prev + 1);
-      setLocationVerified(false);
-      setSelfieUploaded(false);
+      setPhase('decryption');
     } else {
       onComplete();
     }
   };
 
+  if (phase === 'decryption') {
+    return (
+      <DecryptionScreen
+        level={level}
+        currentLevel={currentLevel}
+        totalLevels={7}
+        completedLevels={completedLevels}
+        onDecrypted={handleDecrypted}
+        username={username}
+      />
+    );
+  }
+
   return (
-    <div className="min-h-screen flex flex-col p-4 md:p-6">
-      {/* Header */}
-      <div className="text-center mb-6">
-        <div className="text-xs text-muted-foreground tracking-widest mb-1">
-          TRAVELER: {username.toUpperCase()} | MISSION IN PROGRESS
-        </div>
-        <GlitchText as="h1" className="text-xl md:text-2xl glow-text-cyan">
-          TEMPORAL TREASURE HUNT
-        </GlitchText>
-      </div>
-
-      {/* Level Progress */}
-      <div className="mb-6">
-        <div className="flex justify-between items-center gap-1 md:gap-2">
-          {LEVELS.map((l) => (
-            <div 
-              key={l.id}
-              className={cn(
-                "flex-1 h-2 rounded-full transition-all duration-500",
-                completedLevels.includes(l.id) 
-                  ? "bg-accent glow-border-cyan" 
-                  : l.id === currentLevel 
-                    ? "bg-secondary animate-pulse"
-                    : "bg-muted"
-              )}
-            />
-          ))}
-        </div>
-        <div className="flex justify-between text-xs text-muted-foreground mt-2">
-          <span>LEVEL 1</span>
-          <span>LEVEL 7</span>
-        </div>
-      </div>
-
-      {/* Current Level */}
-      <div className="flex-1 flex flex-col">
-        <div className="terminal-box p-6 flex-1">
-          {/* Level Header */}
-          <div className="flex items-center justify-between mb-6 pb-4 border-b border-primary/20">
-            <div>
-              <div className="text-xs text-secondary tracking-widest mb-1">
-                LEVEL {currentLevel} OF 7
-              </div>
-              <h2 className="font-display text-xl glow-text-amber">
-                {level.name}
-              </h2>
-            </div>
-            <div className={cn(
-              "w-12 h-12 rounded-full flex items-center justify-center border-2",
-              isLevelComplete 
-                ? "border-accent bg-accent/20" 
-                : "border-secondary bg-secondary/10"
-            )}>
-              {isLevelComplete ? (
-                <Check className="w-6 h-6 text-accent" />
-              ) : (
-                <span className="font-display text-lg text-secondary">{currentLevel}</span>
-              )}
-            </div>
-          </div>
-
-          {/* Riddle */}
-          <div className="mb-6">
-            <div className="text-xs text-muted-foreground tracking-wider mb-2">
-              THE RIDDLE:
-            </div>
-            <p className="text-foreground italic text-lg leading-relaxed">
-              "{level.riddle}"
-            </p>
-          </div>
-
-          {/* Hint */}
-          <div className="bg-muted/50 rounded p-4 mb-8 border border-primary/10">
-            <div className="text-xs text-primary tracking-wider mb-1">
-              TEMPORAL HINT:
-            </div>
-            <p className="text-muted-foreground text-sm">
-              {level.hint}
-            </p>
-          </div>
-
-          {/* Verification Tasks */}
-          <div className="space-y-4">
-            {/* Location Check */}
-            <div className={cn(
-              "p-4 rounded border transition-all duration-300",
-              locationVerified 
-                ? "border-accent/50 bg-accent/5" 
-                : "border-primary/30 bg-card"
-            )}>
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  {locationVerified ? (
-                    <div className="w-10 h-10 rounded-full bg-accent/20 flex items-center justify-center">
-                      <Check className="w-5 h-5 text-accent" />
-                    </div>
-                  ) : (
-                    <div className="w-10 h-10 rounded-full bg-primary/20 flex items-center justify-center">
-                      <MapPin className="w-5 h-5 text-primary" />
-                    </div>
-                  )}
-                  <div>
-                    <div className="font-medium">Location Verification</div>
-                    <div className="text-xs text-muted-foreground">
-                      {locationVerified ? 'Position confirmed' : 'Verify you are at the correct location'}
-                    </div>
-                  </div>
-                </div>
-                {!locationVerified && (
-                  <Button 
-                    variant="terminal" 
-                    size="sm"
-                    onClick={verifyLocation}
-                    disabled={isVerifyingLocation}
-                  >
-                    {isVerifyingLocation ? (
-                      <Navigation className="w-4 h-4 animate-spin" />
-                    ) : (
-                      <>
-                        <Navigation className="w-4 h-4 mr-2" />
-                        VERIFY
-                      </>
-                    )}
-                  </Button>
-                )}
-              </div>
-              {locationError && (
-                <div className="mt-3 flex items-center gap-2 text-destructive text-xs">
-                  <AlertCircle className="w-4 h-4" />
-                  {locationError}
-                </div>
-              )}
-            </div>
-
-            {/* Selfie Upload */}
-            <div className={cn(
-              "p-4 rounded border transition-all duration-300",
-              selfieUploaded 
-                ? "border-accent/50 bg-accent/5" 
-                : "border-primary/30 bg-card"
-            )}>
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept="image/*"
-                capture="user"
-                onChange={handleSelfieUpload}
-                className="hidden"
-              />
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  {selfieUploaded ? (
-                    <div className="w-10 h-10 rounded-full bg-accent/20 flex items-center justify-center">
-                      <Check className="w-5 h-5 text-accent" />
-                    </div>
-                  ) : (
-                    <div className="w-10 h-10 rounded-full bg-primary/20 flex items-center justify-center">
-                      <Camera className="w-5 h-5 text-primary" />
-                    </div>
-                  )}
-                  <div>
-                    <div className="font-medium">Temporal Selfie</div>
-                    <div className="text-xs text-muted-foreground">
-                      {selfieUploaded ? 'Image captured' : 'Take a selfie to seal the timeline'}
-                    </div>
-                  </div>
-                </div>
-                {!selfieUploaded && (
-                  <Button 
-                    variant="terminal" 
-                    size="sm"
-                    onClick={() => fileInputRef.current?.click()}
-                  >
-                    <Camera className="w-4 h-4 mr-2" />
-                    CAPTURE
-                  </Button>
-                )}
-              </div>
-            </div>
-          </div>
-
-          {/* Complete Level Button */}
-          {isLevelComplete && (
-            <div className="mt-8 animate-fade-in-up">
-              <Button 
-                variant="terminal" 
-                size="lg"
-                onClick={completeLevel}
-                className="w-full animate-pulse-glow"
-              >
-                {currentLevel === 7 ? (
-                  <>
-                    <Unlock className="w-5 h-5 mr-2" />
-                    COMPLETE MISSION
-                  </>
-                ) : (
-                  <>
-                    <Unlock className="w-5 h-5 mr-2" />
-                    PROCEED TO LEVEL {currentLevel + 1}
-                  </>
-                )}
-              </Button>
-            </div>
-          )}
-        </div>
-      </div>
-    </div>
+    <ExtractionScreen
+      level={level}
+      currentLevel={currentLevel}
+      totalLevels={7}
+      completedLevels={completedLevels}
+      onExtracted={handleExtracted}
+      username={username}
+    />
   );
 };
