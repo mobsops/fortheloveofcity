@@ -1,0 +1,96 @@
+import { Button } from '@/components/ui/button';
+import { Play, RotateCcw, User } from 'lucide-react';
+import { GlitchText } from '@/components/GlitchText';
+
+interface WelcomeBackScreenProps {
+  username: string;
+  currentLevel: number;
+  currentPhase: 'decryption' | 'extraction';
+  onResume: () => void;
+  onRestart: () => void;
+}
+
+export const WelcomeBackScreen = ({ 
+  username, 
+  currentLevel, 
+  currentPhase,
+  onResume, 
+  onRestart 
+}: WelcomeBackScreenProps) => {
+  return (
+    <div className="min-h-screen flex flex-col items-center justify-center p-6">
+      <div className="w-full max-w-md text-center">
+        {/* Avatar */}
+        <div className="w-20 h-20 rounded-full bg-primary/20 border-2 border-primary mx-auto mb-6 flex items-center justify-center animate-pulse-glow">
+          <User className="w-10 h-10 text-primary" />
+        </div>
+
+        {/* Welcome Message */}
+        <div className="mb-8">
+          <div className="text-xs text-muted-foreground tracking-widest mb-2">
+            TEMPORAL LINK DETECTED
+          </div>
+          <GlitchText as="h1" className="text-2xl md:text-3xl glow-text-cyan mb-4">
+            WELCOME BACK
+          </GlitchText>
+          <h2 className="font-display text-xl text-secondary">
+            AGENT {username.toUpperCase()}
+          </h2>
+        </div>
+
+        {/* Session Info */}
+        <div className="terminal-box p-6 mb-8">
+          <div className="text-xs text-muted-foreground tracking-widest mb-4">
+            SESSION RECOVERED
+          </div>
+          
+          <div className="space-y-3">
+            <div className="flex justify-between items-center py-2 border-b border-primary/20">
+              <span className="text-muted-foreground text-sm">Current Level</span>
+              <span className="text-primary font-mono">{currentLevel} / 7</span>
+            </div>
+            <div className="flex justify-between items-center py-2 border-b border-primary/20">
+              <span className="text-muted-foreground text-sm">Current Phase</span>
+              <span className="text-secondary font-mono uppercase">{currentPhase}</span>
+            </div>
+            <div className="flex justify-between items-center py-2">
+              <span className="text-muted-foreground text-sm">Progress</span>
+              <span className="text-accent font-mono">{Math.round(((currentLevel - 1) / 7) * 100)}%</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Actions */}
+        <div className="space-y-3">
+          <Button 
+            variant="terminal" 
+            size="lg"
+            onClick={onResume}
+            className="w-full animate-pulse-glow"
+          >
+            <Play className="w-5 h-5 mr-2" />
+            RESUME MISSION
+          </Button>
+          
+          <Button 
+            variant="outline" 
+            size="lg"
+            onClick={onRestart}
+            className="w-full border-muted-foreground/30 text-muted-foreground hover:text-foreground"
+          >
+            <RotateCcw className="w-5 h-5 mr-2" />
+            START NEW MISSION
+          </Button>
+        </div>
+
+        {/* Status */}
+        <div className="mt-6 text-xs text-muted-foreground/60 font-mono">
+          <div className="flex items-center justify-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-accent animate-pulse" />
+            <span>TEMPORAL SIGNATURE MATCHED</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
