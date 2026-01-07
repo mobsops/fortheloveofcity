@@ -94,14 +94,28 @@ serve(async (req) => {
 
       const data = await response.json();
       console.log(`Image ${i + 1} response received`);
+      console.log(`Full response structure:`, JSON.stringify(data, null, 2));
       
-      const generatedImageUrl = data.choices?.[0]?.message?.images?.[0]?.image_url?.url;
+      // Try multiple possible response formats
+      const generatedImageUrl = 
+        data.choices?.[0]?.message?.images?.[0]?.image_url?.url ||
+        data.choices?.[0]?.message?.images?.[0]?.url ||
+        data.images?.[0]?.url ||
+        data.data?.[0]?.url ||
+        data.data?.[0]?.b64_json;
       
       if (generatedImageUrl) {
-        transformedImages.push(generatedImageUrl);
+        // Handle base64 format if needed
+        const finalUrl = generatedImageUrl.startsWith('data:') 
+          ? generatedImageUrl 
+          : generatedImageUrl.startsWith('/9j') || generatedImageUrl.startsWith('iVBOR')
+            ? `data:image/png;base64,${generatedImageUrl}`
+            : generatedImageUrl;
+        transformedImages.push(finalUrl);
         console.log(`Image ${i + 1} transformed successfully`);
       } else {
-        console.warn(`No image generated for image ${i + 1}, using original`);
+        console.warn(`No image generated for image ${i + 1}. Response keys:`, Object.keys(data));
+        console.warn(`Choices structure:`, JSON.stringify(data.choices?.[0]?.message, null, 2));
         transformedImages.push(images[i]);
       }
     }
