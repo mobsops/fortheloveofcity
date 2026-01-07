@@ -1,7 +1,7 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { GlitchText } from '@/components/GlitchText';
-import { AlertTriangle, Play, ChevronLeft, ChevronRight } from 'lucide-react';
+import { AlertTriangle, ChevronLeft, ChevronRight } from 'lucide-react';
 
 interface VideoRevealScreenProps {
   transformedImages: string[];
@@ -9,45 +9,14 @@ interface VideoRevealScreenProps {
 }
 
 export const VideoRevealScreen = ({ transformedImages, onConfirm }: VideoRevealScreenProps) => {
-  const [isPlaying, setIsPlaying] = useState(false);
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
-  const [showConfirmation, setShowConfirmation] = useState(false);
-
-  // Auto-advance through images when playing
-  useEffect(() => {
-    if (!isPlaying || transformedImages.length === 0) return;
-    
-    const interval = setInterval(() => {
-      setCurrentImageIndex(prev => {
-        if (prev >= transformedImages.length - 1) {
-          setIsPlaying(false);
-          setShowConfirmation(true);
-          return prev;
-        }
-        return prev + 1;
-      });
-    }, 3000);
-
-    return () => clearInterval(interval);
-  }, [isPlaying, transformedImages.length]);
-
-  const handlePlay = () => {
-    setCurrentImageIndex(0);
-    setIsPlaying(true);
-  };
 
   const handlePrev = () => {
     setCurrentImageIndex(prev => Math.max(0, prev - 1));
   };
 
   const handleNext = () => {
-    setCurrentImageIndex(prev => {
-      if (prev >= transformedImages.length - 1) {
-        setShowConfirmation(true);
-        return prev;
-      }
-      return prev + 1;
-    });
+    setCurrentImageIndex(prev => Math.min(transformedImages.length - 1, prev + 1));
   };
 
   return (
@@ -76,7 +45,7 @@ export const VideoRevealScreen = ({ transformedImages, onConfirm }: VideoRevealS
                 <img 
                   src={transformedImages[currentImageIndex]}
                   alt={`Apocalyptic vision ${currentImageIndex + 1}`}
-                  className="w-full h-full object-cover transition-opacity duration-500"
+                  className="w-full h-full object-cover"
                 />
                 
                 {/* Scanline overlay on image */}
@@ -109,7 +78,7 @@ export const VideoRevealScreen = ({ transformedImages, onConfirm }: VideoRevealS
             <div className="absolute top-4 left-4 flex items-center gap-2">
               <div className="w-3 h-3 bg-destructive rounded-full animate-pulse" />
               <span className="text-xs font-mono text-destructive">
-                {isPlaying ? 'PLAYING' : 'TEMPORAL FEED'}
+                TEMPORAL FEED
               </span>
             </div>
 
@@ -121,7 +90,7 @@ export const VideoRevealScreen = ({ transformedImages, onConfirm }: VideoRevealS
         </div>
 
         {/* Navigation Controls */}
-        {transformedImages.length > 1 && !isPlaying && (
+        {transformedImages.length > 1 && (
           <div className="flex justify-center gap-4 mb-6">
             <Button
               variant="terminal"
@@ -131,14 +100,6 @@ export const VideoRevealScreen = ({ transformedImages, onConfirm }: VideoRevealS
             >
               <ChevronLeft className="w-4 h-4 mr-1" />
               PREV
-            </Button>
-            <Button
-              variant="terminal"
-              size="sm"
-              onClick={handlePlay}
-            >
-              <Play className="w-4 h-4 mr-1" />
-              AUTO PLAY
             </Button>
             <Button
               variant="terminal"
@@ -162,22 +123,20 @@ export const VideoRevealScreen = ({ transformedImages, onConfirm }: VideoRevealS
         </div>
 
         {/* Confirmation */}
-        {(showConfirmation || !isPlaying) && (
-          <div className="text-center animate-fade-in-up">
-            <div className="mb-4 text-sm text-muted-foreground font-mono">
-              MISSION BRIEFING COMPLETE
-            </div>
-            <Button
-              variant="danger"
-              size="lg"
-              onClick={onConfirm}
-              className="animate-pulse-glow"
-            >
-              <AlertTriangle className="w-5 h-5 mr-2" />
-              ACCEPT MISSION - SAVE THIS TIMELINE
-            </Button>
+        <div className="text-center">
+          <div className="mb-4 text-sm text-muted-foreground font-mono">
+            MISSION BRIEFING COMPLETE
           </div>
-        )}
+          <Button
+            variant="danger"
+            size="lg"
+            onClick={onConfirm}
+            className="animate-pulse-glow"
+          >
+            <AlertTriangle className="w-5 h-5 mr-2" />
+            ACCEPT MISSION - SAVE THIS TIMELINE
+          </Button>
+        </div>
 
         {/* Timeline indicator */}
         {transformedImages.length > 1 && (
@@ -185,10 +144,7 @@ export const VideoRevealScreen = ({ transformedImages, onConfirm }: VideoRevealS
             {transformedImages.map((_, idx) => (
               <button
                 key={idx}
-                onClick={() => {
-                  setIsPlaying(false);
-                  setCurrentImageIndex(idx);
-                }}
+                onClick={() => setCurrentImageIndex(idx)}
                 className={`w-2 h-2 rounded-full transition-all ${
                   idx === currentImageIndex 
                     ? 'bg-destructive w-4' 
