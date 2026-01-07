@@ -5,17 +5,11 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-const APOCALYPTIC_PROMPT = `Transform this image into a post-apocalyptic disaster scene. 
-The streets should be splitting apart with massive cracks and chasms. 
-All buildings should be crumbling, falling down, and catching fire with intense flames and smoke.
-The sky should be dark and ominous with an orange/red glow from the fires.
-If there are any people in the image, show them running in panic and terror.
-Add debris, destruction, smoke, and chaos everywhere.
-Make it look like the end of the world is happening.
-Ultra high resolution, cinematic quality, dramatic lighting.`;
+// Optimized prompt for Nano Banana
+const APOCALYPTIC_PROMPT = `Photorealistic cinematic wide shot. A catastrophic post-apocalyptic scene based on the provided image. Deep tectonic fissures splitting the asphalt roads. Structural collapses of skyscrapers with exposed rebar and crumbling concrete. Intense fireballs and volumetric thick black smoke billowing into a dark, smog-filled sky. An eerie, high-contrast orange-red glow illuminating the chaos. Sharp details on debris, dust, and wreckage. High dynamic range, hyper-detailed textures, 8k resolution, disaster movie aesthetic.`;
 
 serve(async (req) => {
-  // Handle CORS preflight requests
+  // Handle CORS
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
@@ -30,111 +24,65 @@ serve(async (req) => {
       );
     }
 
-    const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
-    if (!LOVABLE_API_KEY) {
-      console.error('LOVABLE_API_KEY is not configured');
-      throw new Error('LOVABLE_API_KEY is not configured');
+    const API_KEY = Deno.env.get('LOVABLE_API_KEY');
+    if (!API_KEY) {
+      throw new Error('LOVABLE_API_KEY is not configured in environment variables');
     }
 
-    console.log(`Processing ${images.length} images with apocalyptic transformation...`);
+    console.log(`Starting apocalyptic transformation for ${images.length} images...`);
 
-    const transformedImages: string[] = [];
-
-    for (let i = 0; i < images.length; i++) {
-      console.log(`Transforming image ${i + 1}/${images.length}...`);
-      
+    // Helper function to call the Nano Banana (Gemini) model
+    const transformImage = async (imageUrl: string) => {
       const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
         method: "POST",
         headers: {
-          Authorization: `Bearer ${LOVABLE_API_KEY}`,
+          "Authorization": `Bearer ${API_KEY}`,
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          model: "google/gemini-2.5-flash-image-preview",
+          model: "google/gemini-2.5-flash-image", // This is the official Nano Banana model ID
           messages: [
             {
               role: "user",
               content: [
-                {
-                  type: "text",
-                  text: APOCALYPTIC_PROMPT
-                },
-                {
-                  type: "image_url",
-                  image_url: {
-                    url: images[i]
-                  }
-                }
+                { type: "text", text: APOCALYPTIC_PROMPT },
+                { type: "image_url", image_url: { url: imageUrl } }
               ]
             }
           ],
-          modalities: ["image", "text"]
+          modalities: ["image"]
         }),
       });
 
       if (!response.ok) {
         const errorText = await response.text();
-        console.error(`AI gateway error for image ${i + 1}:`, response.status, errorText);
-        
-        if (response.status === 429) {
-          return new Response(
-            JSON.stringify({ error: 'Rate limit exceeded. Please try again later.' }),
-            { status: 429, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-          );
-        }
-        if (response.status === 402) {
-          return new Response(
-            JSON.stringify({ error: 'Payment required. Please add credits to continue.' }),
-            { status: 402, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-          );
-        }
-        
-        throw new Error(`Failed to transform image ${i + 1}`);
+        console.error("Model Error:", errorText);
+        return imageUrl; // Return original if error occurs
       }
 
       const data = await response.json();
-      console.log(`Image ${i + 1} response received`);
-      console.log(`Full response structure:`, JSON.stringify(data, null, 2));
-      
-      // Try multiple possible response formats
-      const generatedImageUrl = 
-        data.choices?.[0]?.message?.images?.[0]?.image_url?.url ||
-        data.choices?.[0]?.message?.images?.[0]?.url ||
-        data.images?.[0]?.url ||
-        data.data?.[0]?.url ||
-        data.data?.[0]?.b64_json;
-      
-      if (generatedImageUrl) {
-        // Handle base64 format if needed
-        const finalUrl = generatedImageUrl.startsWith('data:') 
-          ? generatedImageUrl 
-          : generatedImageUrl.startsWith('/9j') || generatedImageUrl.startsWith('iVBOR')
-            ? `data:image/png;base64,${generatedImageUrl}`
-            : generatedImageUrl;
-        transformedImages.push(finalUrl);
-        console.log(`Image ${i + 1} transformed successfully`);
-      } else {
-        console.warn(`No image generated for image ${i + 1}. Response keys:`, Object.keys(data));
-        console.warn(`Choices structure:`, JSON.stringify(data.choices?.[0]?.message, null, 2));
-        transformedImages.push(images[i]);
-      }
-    }
+      // Extract the generated image URL
+      return data.choices?.[0]?.message?.images?.[0]?.image_url?.url || imageUrl;
+    };
 
-    console.log(`All ${transformedImages.length} images processed`);
+    // Process all images at once
+    const transformedImages = await Promise.all(
+      images.map(url => transformImage(url))
+    );
 
     return new Response(
       JSON.stringify({ 
         success: true, 
         transformedImages,
-        message: `Successfully transformed ${transformedImages.length} images into apocalyptic scenes`
+        message: "Transformation complete" 
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
 
   } catch (error) {
-    console.error('Transform photos error:', error);
+    console.error('Execution Error:', error);
     return new Response(
-      JSON.stringify({ error: error instanceof Error ? error.message : 'Unknown error occurred' }),
+      JSON.stringify({ error: error.message }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   }
