@@ -102,10 +102,11 @@ export const ProcessingScreen = ({ photos, onComplete }: ProcessingScreenProps) 
   useEffect(() => {
     if (!isProcessing) return;
 
-    const allMessages = apiError 
-      ? [...PROCESSING_MESSAGES, ...ERROR_MESSAGES, ...FINAL_MESSAGES]
-      : transformedImages 
-        ? [...PROCESSING_MESSAGES, ...FINAL_MESSAGES]
+    // Determine which messages to show based on state
+    const allMessages = transformedImages 
+      ? [...PROCESSING_MESSAGES, ...FINAL_MESSAGES]
+      : apiError 
+        ? [...PROCESSING_MESSAGES, ...ERROR_MESSAGES, ...FINAL_MESSAGES]
         : PROCESSING_MESSAGES;
 
     if (currentMessageIndex < allMessages.length) {
@@ -124,30 +125,32 @@ export const ProcessingScreen = ({ photos, onComplete }: ProcessingScreenProps) 
 
       return () => clearTimeout(timer);
     } else if (transformedImages) {
-      // All messages complete and we have images
+      // All messages complete and we have images - proceed!
+      console.log('Processing complete, transitioning with images:', transformedImages.length);
       setIsProcessing(false);
       const timer = setTimeout(() => {
         onComplete(transformedImages);
-      }, 1500);
+      }, 1000);
       return () => clearTimeout(timer);
     }
   }, [currentMessageIndex, transformedImages, apiError, isProcessing, onComplete]);
 
-  // Keep showing messages while waiting for API
+  // Keep showing waiting messages while API is processing
   useEffect(() => {
-    if (!transformedImages && currentMessageIndex >= PROCESSING_MESSAGES.length) {
-      // Loop through error messages while waiting
-      const loopMessages = () => {
+    if (transformedImages || !isProcessing) return; // Exit if we have images or not processing
+    
+    if (currentMessageIndex >= PROCESSING_MESSAGES.length) {
+      // Show waiting message every 3 seconds while API works
+      const timer = setTimeout(() => {
         setDisplayedMessages(prev => [...prev, {
           text: "STABILIZING QUANTUM LINK...",
           delay: 3000,
         }]);
-      };
+      }, 3000);
       
-      const interval = setInterval(loopMessages, 4000);
-      return () => clearInterval(interval);
+      return () => clearTimeout(timer);
     }
-  }, [transformedImages, currentMessageIndex]);
+  }, [transformedImages, currentMessageIndex, isProcessing, displayedMessages.length]);
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center p-6">
