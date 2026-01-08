@@ -1,14 +1,14 @@
 import { useState, useRef, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Send, Lock, Unlock, HelpCircle, AlertCircle, Loader2, ArrowLeft, BookOpen } from 'lucide-react';
+import { Send, Lock, Unlock, HelpCircle, AlertCircle, Loader2, ArrowLeft, BookOpen, MapPin } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { GlitchText } from '@/components/GlitchText';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { Level, LEVELS, DECRYPTION_POINTS, EXTRACTION_POINTS, REQUIRED_STABILITY } from '@/data/levels';
 import { NodeProgress } from '@/components/game/TimelineDashboard';
-import { StabilityMeter } from '@/components/game/StabilityMeter';
+import { useLanguage } from '@/contexts/LanguageContext';
 
 interface ChatMessage {
   role: 'user' | 'system';
@@ -33,10 +33,11 @@ export const DecryptionScreen = ({
   onBack,
   username 
 }: DecryptionScreenProps) => {
+  const { t } = useLanguage();
   const [messages, setMessages] = useState<ChatMessage[]>([
     { 
       role: 'system', 
-      content: `AGENT ${username.toUpperCase()}, accessing temporal node ${level.id}. Solve the riddle to identify the location signal. I cannot reveal the answer directly, but I can help you think.`
+      content: `${t('agent')} ${username.toUpperCase()}, ${t('chronos_intro')} ${level.id}. ${t('chronos_help')}`
     }
   ]);
   const [input, setInput] = useState('');
@@ -152,7 +153,7 @@ export const DecryptionScreen = ({
         setIsDecrypted(true);
         setMessages(prev => [...prev, {
           role: 'system',
-          content: `✓ SIGNAL IDENTIFIED! Location: ${level.location.toUpperCase()}. +${DECRYPTION_POINTS} stability points earned.`,
+          content: `✓ ${t('signal_identified')} ${level.location.toUpperCase()}. +${DECRYPTION_POINTS} ${t('points_earned')}`,
           isSuccess: true
         }]);
         setShowStory(true);
@@ -180,29 +181,29 @@ export const DecryptionScreen = ({
       <div className="flex items-center justify-between mb-4">
         <Button variant="ghost" size="sm" onClick={onBack} className="text-muted-foreground">
           <ArrowLeft className="w-4 h-4 mr-1" />
-          DASHBOARD
+          {t('dashboard')}
         </Button>
         <div className="text-xs text-muted-foreground tracking-widest">
-          AGENT: {username.toUpperCase()}
+          {t('agent')}: {username.toUpperCase()}
         </div>
       </div>
 
       <div className="text-center mb-4">
         <div className="text-xs text-secondary tracking-widest mb-1">
-          NODE {level.id} | {level.era}
+          {t('node')} {level.id} | {level.era}
         </div>
         <GlitchText as="h1" className="text-xl md:text-2xl glow-text-cyan">
           {level.name}
         </GlitchText>
         <div className="text-xs text-primary tracking-widest mt-1">
-          DECRYPTION PHASE
+          {t('decryption_phase')}
         </div>
       </div>
 
       {/* Compact Stability Display */}
       <div className="terminal-box p-3 mb-4">
         <div className="flex items-center justify-between text-sm">
-          <span className="text-muted-foreground">Stability</span>
+          <span className="text-muted-foreground">{t('stability_meter')}</span>
           <span className="font-mono text-primary">{calculatePoints().toFixed(1)} / {REQUIRED_STABILITY.toFixed(1)}</span>
         </div>
       </div>
@@ -222,7 +223,7 @@ export const DecryptionScreen = ({
           </div>
           <div className="text-xs text-primary tracking-wider flex items-center gap-1">
             <HelpCircle className="w-3 h-3" />
-            THE RIDDLE:
+            {t('the_riddle')}
           </div>
         </div>
         <p className="text-foreground italic text-sm leading-relaxed bg-muted/50 rounded p-3 border border-primary/10">
@@ -230,21 +231,35 @@ export const DecryptionScreen = ({
         </p>
       </div>
 
-      {/* Story Reveal */}
+      {/* Story & Location Reveal */}
       {showStory && (
-        <div className="terminal-box p-4 mb-4 border-secondary/50 animate-fade-in-up">
-          <div className="flex items-center gap-2 mb-2">
-            <BookOpen className="w-4 h-4 text-secondary" />
-            <span className="text-xs text-secondary tracking-widest">NARRATIVE LINK UNLOCKED</span>
+        <>
+          {/* Target Location */}
+          <div className="terminal-box p-4 mb-4 border-primary/50 animate-fade-in-up">
+            <div className="flex items-center gap-2 mb-2">
+              <MapPin className="w-4 h-4 text-primary" />
+              <span className="text-xs text-primary tracking-widest">{t('target_location')}</span>
+            </div>
+            <p className="text-sm text-foreground font-mono">
+              {level.location}
+            </p>
           </div>
-          <p className="text-sm text-muted-foreground leading-relaxed">
-            {level.storyDecryption}
-          </p>
-        </div>
+          
+          {/* Story/Narrative */}
+          <div className="terminal-box p-4 mb-4 border-secondary/50 animate-fade-in-up">
+            <div className="flex items-center gap-2 mb-2">
+              <BookOpen className="w-4 h-4 text-secondary" />
+              <span className="text-xs text-secondary tracking-widest">{t('narrative_unlocked')}</span>
+            </div>
+            <p className="text-sm text-muted-foreground leading-relaxed">
+              {level.storyDecryption}
+            </p>
+          </div>
+        </>
       )}
 
       {/* Chat Area */}
-      <div className="flex-1 terminal-box p-4 flex flex-col min-h-[250px]">
+      <div className="flex-1 terminal-box p-4 flex flex-col min-h-[200px]">
         <div className="flex-1 overflow-y-auto space-y-3 mb-4">
           {messages.map((msg, idx) => (
             <div 
@@ -276,7 +291,7 @@ export const DecryptionScreen = ({
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && !isEvaluating && handleSubmit()}
-              placeholder="Enter your answer..."
+              placeholder={t('enter_answer')}
               className="flex-1 bg-background/50"
               disabled={isEvaluating}
             />
@@ -300,7 +315,7 @@ export const DecryptionScreen = ({
             className="w-full animate-pulse-glow"
           >
             <Unlock className="w-4 h-4 mr-2" />
-            PROCEED TO EXTRACTION (+0.5 on-site)
+            {t('proceed_extraction')}
           </Button>
         )}
       </div>
@@ -309,7 +324,7 @@ export const DecryptionScreen = ({
       <div className="text-center text-xs text-muted-foreground/60 mt-3 font-mono">
         <div className="flex items-center justify-center gap-2">
           <AlertCircle className="w-3 h-3" />
-          <span>DECRYPTION ATTEMPTS: {attempts}</span>
+          <span>{t('decryption_attempts')}: {attempts}</span>
         </div>
       </div>
     </div>

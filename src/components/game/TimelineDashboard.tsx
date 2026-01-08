@@ -4,6 +4,7 @@ import { TimelineTile, TileStatus } from './TimelineTile';
 import { LEVELS, Level, REQUIRED_STABILITY, DECRYPTION_POINTS, EXTRACTION_POINTS } from '@/data/levels';
 import { Button } from '@/components/ui/button';
 import { Shield } from 'lucide-react';
+import { useLanguage } from '@/contexts/LanguageContext';
 
 export interface NodeProgress {
   decrypted: boolean;
@@ -23,6 +24,8 @@ export const TimelineDashboard = ({
   onSelectNode,
   onComplete
 }: TimelineDashboardProps) => {
+  const { t } = useLanguage();
+  
   // Calculate total points
   const calculatePoints = (): number => {
     let points = 0;
@@ -56,13 +59,13 @@ export const TimelineDashboard = ({
       {/* Header */}
       <div className="text-center mb-4">
         <div className="text-xs text-muted-foreground tracking-widest mb-1">
-          AGENT: {username.toUpperCase()} | MISSION: TIMELINE REPAIR
+          {t('agent')}: {username.toUpperCase()} | MISSION: TIMELINE REPAIR
         </div>
         <GlitchText as="h1" className="text-xl md:text-2xl glow-text-cyan">
-          MOSCOW TIMELINE NODES
+          {t('timeline_nodes')}
         </GlitchText>
         <p className="text-xs text-muted-foreground mt-2">
-          Stabilize fractured temporal nodes. Each node requires DECRYPTION (remote) and EXTRACTION (on-site).
+          {t('warning_unstable')}
         </p>
       </div>
 
@@ -91,7 +94,7 @@ export const TimelineDashboard = ({
             className="w-full bg-accent hover:bg-accent/90 text-accent-foreground animate-pulse-glow"
           >
             <Shield className="w-5 h-5 mr-2" />
-            FINALIZE TIMELINE RESTORATION
+            {t('complete_mission')}
           </Button>
         </div>
       )}
@@ -100,15 +103,15 @@ export const TimelineDashboard = ({
       <div className="mt-4 flex justify-center gap-6 text-xs font-mono text-muted-foreground">
         <div className="flex items-center gap-2">
           <div className="w-3 h-3 rounded-full bg-secondary" />
-          <span>DECRYPTED</span>
+          <span>{t('decrypted')}</span>
         </div>
         <div className="flex items-center gap-2">
           <div className="w-3 h-3 rounded-full bg-accent" />
-          <span>EXTRACTED</span>
+          <span>{t('extracted')}</span>
         </div>
         <div className="flex items-center gap-2">
           <div className="w-3 h-3 rounded-full bg-muted" />
-          <span>UNSTABLE</span>
+          <span>{t('locked')}</span>
         </div>
       </div>
     </div>
