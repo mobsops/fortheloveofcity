@@ -210,7 +210,12 @@ export const ExtractionScreen = ({
           </div>
         </div>
 
-        <p className="text-sm text-muted-foreground">
+        {/* Story Description */}
+        <p className="text-sm text-muted-foreground leading-relaxed mb-3 border-l-2 border-secondary/50 pl-3">
+          {level.storyDecryption}
+        </p>
+
+        <p className="text-xs text-muted-foreground/70">
           {t('location_signal')}
         </p>
       </div>
