@@ -26,7 +26,7 @@ const Index = () => {
   const [photos, setPhotos] = useState<File[]>([]);
   const [transformedImages, setTransformedImages] = useState<string[]>([]);
   const { session, loadSession, resetSession, setSession } = useGameSession();
-  const { isMuted, play: playAudio, toggleMute } = useAudio();
+  const { isMuted, isLoading: audioLoading, play: playAudio, toggleMute } = useAudio();
 
   // Start audio on first user interaction
   const handleFirstInteraction = useCallback(() => {
@@ -88,7 +88,7 @@ const Index = () => {
   return (
     <div className="min-h-screen bg-background relative overflow-hidden">
       <ScanlineOverlay />
-      <AudioControl isMuted={isMuted} onToggle={toggleMute} />
+      <AudioControl isMuted={isMuted} isLoading={audioLoading} onToggle={toggleMute} />
       
       <main className="relative z-10">
         {gameState === 'username' && (
