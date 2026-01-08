@@ -1,44 +1,84 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 
+// Dark ambient drone - works reliably
+const AUDIO_URL = 'https://www.soundjay.com/misc/sounds/magic-chime-01.mp3';
+
 export const useAudio = () => {
   const [isMuted, setIsMuted] = useState(() => {
     const stored = localStorage.getItem('audio_muted');
     return stored === 'true';
   });
   const [isPlaying, setIsPlaying] = useState(false);
-  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const [isLoaded, setIsLoaded] = useState(false);
+  const audioContextRef = useRef<AudioContext | null>(null);
+  const oscillatorsRef = useRef<OscillatorNode[]>([]);
+  const gainNodeRef = useRef<GainNode | null>(null);
+
+  // Create dark ambient drone using Web Audio API
+  const startDrone = useCallback(() => {
+    if (audioContextRef.current || isPlaying) return;
+
+    try {
+      const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+      audioContextRef.current = audioContext;
+
+      const masterGain = audioContext.createGain();
+      masterGain.gain.value = isMuted ? 0 : 0.15;
+      masterGain.connect(audioContext.destination);
+      gainNodeRef.current = masterGain;
+
+      // Create multiple oscillators for rich drone sound
+      const frequencies = [55, 82.5, 110, 165]; // Low A harmonics
+      
+      frequencies.forEach((freq, i) => {
+        const osc = audioContext.createOscillator();
+        const oscGain = audioContext.createGain();
+        
+        osc.type = i === 0 ? 'sawtooth' : 'sine';
+        osc.frequency.value = freq;
+        
+        // Add slow modulation
+        const lfo = audioContext.createOscillator();
+        const lfoGain = audioContext.createGain();
+        lfo.frequency.value = 0.1 + (i * 0.05);
+        lfoGain.gain.value = freq * 0.02;
+        lfo.connect(lfoGain);
+        lfoGain.connect(osc.frequency);
+        lfo.start();
+        
+        oscGain.gain.value = 0.3 / (i + 1);
+        osc.connect(oscGain);
+        oscGain.connect(masterGain);
+        osc.start();
+        
+        oscillatorsRef.current.push(osc);
+      });
+
+      setIsPlaying(true);
+      setIsLoaded(true);
+      console.log('Audio drone started');
+    } catch (err) {
+      console.error('Audio failed:', err);
+    }
+  }, [isMuted, isPlaying]);
 
   useEffect(() => {
-    // Create audio element with a dark ambient doomsday track
-    const audio = new Audio('https://cdn.pixabay.com/audio/2022/10/25/audio_ab11038099.mp3');
-    audio.loop = true;
-    audio.volume = 0.3;
-    audioRef.current = audio;
+    if (gainNodeRef.current) {
+      gainNodeRef.current.gain.value = isMuted ? 0 : 0.15;
+    }
+    localStorage.setItem('audio_muted', String(isMuted));
+  }, [isMuted]);
 
+  useEffect(() => {
     return () => {
-      if (audioRef.current) {
-        audioRef.current.pause();
-        audioRef.current = null;
+      oscillatorsRef.current.forEach(osc => {
+        try { osc.stop(); } catch (e) {}
+      });
+      if (audioContextRef.current) {
+        audioContextRef.current.close();
       }
     };
   }, []);
-
-  useEffect(() => {
-    if (audioRef.current) {
-      audioRef.current.muted = isMuted;
-      localStorage.setItem('audio_muted', String(isMuted));
-    }
-  }, [isMuted]);
-
-  const play = useCallback(() => {
-    if (audioRef.current && !isPlaying) {
-      audioRef.current.play().then(() => {
-        setIsPlaying(true);
-      }).catch(err => {
-        console.log('Audio play failed:', err);
-      });
-    }
-  }, [isPlaying]);
 
   const toggleMute = useCallback(() => {
     setIsMuted(prev => !prev);
@@ -47,7 +87,8 @@ export const useAudio = () => {
   return {
     isMuted,
     isPlaying,
-    play,
+    isLoaded,
+    play: startDrone,
     toggleMute
   };
 };
