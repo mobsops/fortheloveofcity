@@ -1,4 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { GoogleGenerativeAI } from "https://esm.sh/@google/generative-ai@0.1.3";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -13,10 +14,13 @@ serve(async (req) => {
   try {
     const { userAnswer, riddle, correctAnswer, answerAliases, hint, attemptCount } = await req.json();
 
-    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-    if (!LOVABLE_API_KEY) {
-      throw new Error("LOVABLE_API_KEY is not configured");
+    const GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY");
+    if (!GEMINI_API_KEY) {
+      throw new Error("GEMINI_API_KEY is not configured");
     }
+
+    const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
+    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
 
     const systemPrompt = `You are the **Chronos Daemon**, a trickster spirit trapped in the machine. You guard the timeline of Moscow. You enjoy watching humans struggle.
 
@@ -29,7 +33,14 @@ YOUR BEHAVIOR RULES:
 4. **IF CLOSE:** If they are warm (e.g., "The Red Fortress" instead of "Kremlin"), tease them. "You are standing on the edge of the truth, but you haven't stepped in."
 5. **IF CORRECT:** Be angry or grudging. You hate that they solved it. "Fine. You guessed it. Purely by luck."
 6. Cities, countries, or general areas (Moscow, Russia, St. Petersburg) are NEVER correct - only SPECIFIC landmarks are valid.
-7. After many failed attempts (>5), you may give slightly less cryptic hints, but NEVER reveal the answer directly.`;
+7. After many failed attempts (>5), you may give slightly less cryptic hints, but NEVER reveal the answer directly.
+
+OUTPUT: Return ONLY valid JSON with no markdown formatting. Format:
+{
+  "isCorrect": boolean,
+  "isClose": boolean,
+  "response": "your cryptic response (max 2 sentences)"
+}`;
 
     const userPrompt = `THE RIDDLE: "${riddle}"
 
@@ -43,97 +54,41 @@ ATTEMPT NUMBER: ${attemptCount}
 
 Evaluate if the user's guess matches the Secret Answer or any alias. Remember you are the Chronos Daemon - be cryptic, mocking, and NEVER helpful in a straightforward way.`;
 
-    const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${LOVABLE_API_KEY}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: "google/gemini-2.5-flash",
-        messages: [
-          { role: "system", content: systemPrompt },
-          { role: "user", content: userPrompt },
-        ],
-        tools: [
-          {
-            type: "function",
-            function: {
-              name: "evaluate_answer",
-              description: "Evaluate the user's answer to the riddle",
-              parameters: {
-                type: "object",
-                properties: {
-                  isCorrect: { 
-                    type: "boolean", 
-                    description: "True only if the answer exactly matches the correct answer or an alias" 
-                  },
-                  isClose: { 
-                    type: "boolean", 
-                    description: "True if the answer is related but not exact" 
-                  },
-                  response: { 
-                    type: "string", 
-                    description: "Hint or feedback message (max 2 sentences, never reveal answer)" 
-                  },
-                },
-                required: ["isCorrect", "isClose", "response"],
-                additionalProperties: false,
-              },
-            },
-          },
-        ],
-        tool_choice: { type: "function", function: { name: "evaluate_answer" } },
-      }),
-    });
+    console.log("Calling Gemini API for answer evaluation...");
+    const result = await model.generateContent([
+      { text: systemPrompt },
+      { text: userPrompt }
+    ]);
+    const response = await result.response;
+    const text = response.text();
+    console.log("Gemini response:", text);
 
-    if (!response.ok) {
-      if (response.status === 429) {
-        return new Response(
-          JSON.stringify({ error: "Rate limit exceeded. Please try again in a moment." }),
-          { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
-      }
-      if (response.status === 402) {
-        return new Response(
-          JSON.stringify({ error: "Service temporarily unavailable." }),
-          { status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
-      }
-      const errorText = await response.text();
-      console.error("AI gateway error:", response.status, errorText);
-      throw new Error("Failed to evaluate answer");
-    }
-
-    const data = await response.json();
-    console.log("AI Response:", JSON.stringify(data));
-
-    // Extract the tool call result
-    const toolCall = data.choices?.[0]?.message?.tool_calls?.[0];
-    if (toolCall?.function?.arguments) {
-      const result = JSON.parse(toolCall.function.arguments);
-      return new Response(JSON.stringify(result), {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-
-    // Fallback if no tool call
-    return new Response(
-      JSON.stringify({
+    // Clean and parse JSON
+    const cleanJson = text.replace(/```json|```/g, "").trim();
+    let evaluationResult: { isCorrect: boolean; isClose: boolean; response: string };
+    
+    try {
+      evaluationResult = JSON.parse(cleanJson);
+    } catch (parseError) {
+      console.error("Failed to parse Gemini response:", parseError);
+      evaluationResult = {
         isCorrect: false,
         isClose: false,
-        response: "Think about the riddle more carefully. What specific Moscow landmark fits these clues?",
-      }),
-      { headers: { ...corsHeaders, "Content-Type": "application/json" } }
-    );
+        response: "The Daemon's mind wanders... Try again, perhaps with a clearer thought.",
+      };
+    }
+
+    return new Response(JSON.stringify(evaluationResult), {
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
   } catch (error) {
     console.error("Error:", error);
     return new Response(
-      JSON.stringify({ 
+      JSON.stringify({
         error: error instanceof Error ? error.message : "Unknown error",
         isCorrect: false,
         isClose: false,
-        response: "System interference detected. Try again, agent."
+        response: "System interference detected. Try again, agent.",
       }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );

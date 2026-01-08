@@ -1,58 +1,53 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { GoogleGenerativeAI } from "https://esm.sh/@google/generative-ai@0.1.3";
 
 const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
 // Helper to send Email (Using Resend API)
 async function sendToOperator(photoBase64: string, target: string, aiResult: { isMatch: boolean; comment: string }) {
-  const RESEND_API_KEY = Deno.env.get('RESEND_API_KEY');
+  const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY");
   if (!RESEND_API_KEY) {
-    console.log('RESEND_API_KEY not configured, skipping email');
+    console.log("No RESEND_API_KEY configured, skipping email");
     return;
   }
 
   try {
-    const response = await fetch('https://api.resend.com/emails', {
-      method: 'POST',
+    const response = await fetch("https://api.resend.com/emails", {
+      method: "POST",
       headers: {
-        'Authorization': `Bearer ${RESEND_API_KEY}`,
-        'Content-Type': 'application/json'
+        Authorization: `Bearer ${RESEND_API_KEY}`,
+        "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        from: 'Protocol_Omega <onboarding@resend.dev>',
-        to: ['mobthomas@gmail.com'],
+        from: "Protocol_Omega <onboarding@resend.dev>",
+        to: ["mobthomas@gmail.com"],
         subject: `EVIDENCE SUBMITTED: ${target}`,
         html: `
           <h1>New Mission Evidence</h1>
           <p><strong>Target:</strong> ${target}</p>
-          <p><strong>AI Verdict:</strong> ${aiResult.isMatch ? 'MATCH ✓' : 'FAIL ✗'}</p>
+          <p><strong>AI Verdict:</strong> ${aiResult.isMatch ? "MATCH ✓" : "FAIL ✗"}</p>
           <p><strong>AI Comment:</strong> "${aiResult.comment}"</p>
           <p>See attached photo.</p>
         `,
         attachments: [
           {
-            filename: 'evidence.jpg',
+            filename: "evidence.jpg",
             content: photoBase64.replace(/^data:image\/\w+;base64,/, ""),
-          }
-        ]
-      })
+          },
+        ],
+      }),
     });
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error('Email send failed:', errorText);
-    } else {
-      console.log('Email sent successfully to operator');
-    }
+    console.log("Email sent, status:", response.status);
   } catch (error) {
-    console.error('Error sending email:', error);
+    console.error("Failed to send email:", error);
   }
 }
 
 serve(async (req) => {
-  if (req.method === 'OPTIONS') {
+  if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
 
@@ -60,122 +55,75 @@ serve(async (req) => {
     const { photoBase64, targetLandmark } = await req.json();
 
     if (!photoBase64 || !targetLandmark) {
-      throw new Error('Missing required fields: photoBase64 and targetLandmark');
+      return new Response(
+        JSON.stringify({ error: "Missing photoBase64 or targetLandmark" }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
     }
 
-    const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
-    if (!LOVABLE_API_KEY) {
-      throw new Error('LOVABLE_API_KEY is not configured');
+    const GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY");
+    if (!GEMINI_API_KEY) {
+      throw new Error("GEMINI_API_KEY is not configured");
     }
 
-    // --- STEP A: AI VERIFICATION (Using Lovable AI with Gemini) ---
+    // Initialize Gemini
+    const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
+    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+
     const prompt = `You are the Chronos Daemon, a deceptive trickster AI trapped in the machine.
+      
 Check if this image clearly shows: "${targetLandmark}".
 
 RULES:
-1. If the image CLEARLY shows the landmark "${targetLandmark}" or something unmistakably recognizable as that location, return TRUE. Be angry/grudging about it. Say things like "Fine. You found it. I was hoping you'd fail."
-2. If the image does NOT show the landmark, return FALSE. Mock them creatively and insult their attempt. Be playful but mean.
-3. If the image is blurry, dark, or unclear, return FALSE. Insult their camera or photography skills.
-4. NEVER reveal what you're looking for if they got it wrong.
+1. If it's a MATCH: Return TRUE. Be angry and grudging about their success.
+2. If it's NOT a match: Return FALSE. Mock them creatively and sarcastically.
+3. If the image is blurry or unclear: Return FALSE. Insult their camera skills.
+4. Cities, countries, or general areas are NEVER valid - only SPECIFIC landmarks count.
 
-OUTPUT: Return ONLY a valid JSON object. No markdown, no extra text.
-{ "isMatch": boolean, "comment": string }`;
+OUTPUT: Return ONLY valid JSON with no markdown formatting. Format: { "isMatch": boolean, "comment": "your response" }`;
 
-    // Prepare the base64 image data
-    const imageData = photoBase64.replace(/^data:image\/\w+;base64,/, "");
-
-    const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${LOVABLE_API_KEY}`,
-        "Content-Type": "application/json",
+    const imagePart = {
+      inlineData: {
+        data: photoBase64.replace(/^data:image\/\w+;base64,/, ""),
+        mimeType: "image/jpeg",
       },
-      body: JSON.stringify({
-        model: "google/gemini-2.5-flash",
-        messages: [
-          {
-            role: "user",
-            content: [
-              { type: "text", text: prompt },
-              {
-                type: "image_url",
-                image_url: {
-                  url: `data:image/jpeg;base64,${imageData}`
-                }
-              }
-            ]
-          }
-        ]
-      }),
-    });
+    };
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error("AI gateway error:", response.status, errorText);
-      
-      if (response.status === 429) {
-        return new Response(JSON.stringify({ 
-          error: "Rate limit exceeded. Please try again in a moment.",
-          isMatch: false,
-          comment: "The Moscow Grid is overloaded. Try again, mortal."
-        }), {
-          status: 429,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        });
-      }
-      
-      if (response.status === 402) {
-        return new Response(JSON.stringify({ 
-          error: "Service temporarily unavailable.",
-          isMatch: false,
-          comment: "The Chronos Daemon sleeps... (Service unavailable)"
-        }), {
-          status: 402,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        });
-      }
+    console.log("Calling Gemini API for image verification...");
+    const result = await model.generateContent([prompt, imagePart]);
+    const response = await result.response;
+    const text = response.text();
+    console.log("Gemini response:", text);
 
-      throw new Error(`AI gateway returned ${response.status}`);
-    }
-
-    const data = await response.json();
-    const aiResponseText = data.choices?.[0]?.message?.content || '';
-    
-    console.log("AI Response:", aiResponseText);
-
-    // Parse the JSON response
+    // Clean and parse JSON
+    const cleanJson = text.replace(/```json|```/g, "").trim();
     let aiData: { isMatch: boolean; comment: string };
+    
     try {
-      // Clean up the response - remove markdown code blocks if present
-      const cleanJson = aiResponseText.replace(/```json\s*|\s*```/g, '').trim();
       aiData = JSON.parse(cleanJson);
     } catch (parseError) {
-      console.error("Failed to parse AI response:", aiResponseText);
-      // Fallback response
+      console.error("Failed to parse Gemini response:", parseError);
       aiData = {
         isMatch: false,
-        comment: "The Chronos Daemon is confused by your offering. Try again with a clearer image."
+        comment: "The Daemon's circuits glitched. Try again, mortal.",
       };
     }
 
-    // --- STEP B: SEND TO OPERATOR (ASYNC) ---
-    // Don't await - let it run in background
+    // Send to operator asynchronously (don't wait)
     sendToOperator(photoBase64, targetLandmark, aiData).catch(console.error);
 
     return new Response(JSON.stringify(aiData), {
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
-
-  } catch (error: unknown) {
-    console.error('verify-location error:', error);
-    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-    return new Response(JSON.stringify({ 
-      error: errorMessage,
-      isMatch: false,
-      comment: "A glitch in the Moscow Grid... Try again."
-    }), {
-      status: 500,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-    });
+  } catch (error) {
+    console.error("Error:", error);
+    return new Response(
+      JSON.stringify({
+        error: error instanceof Error ? error.message : "Unknown error",
+        isMatch: false,
+        comment: "System malfunction. The Daemon sleeps... for now.",
+      }),
+      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+    );
   }
 });
