@@ -8,3 +8,6 @@ verify_jwt = false
 
 [functions.verify-location]
 verify_jwt = false
+
+[functions.validate-admin]
+verify_jwt = false
