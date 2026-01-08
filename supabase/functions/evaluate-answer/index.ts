@@ -6,6 +6,67 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+interface EvaluationResult {
+  isCorrect: boolean;
+  isClose: boolean;
+  response: string;
+}
+
+// Call using user's Gemini API key directly
+async function callGeminiDirect(systemPrompt: string, userPrompt: string): Promise<EvaluationResult> {
+  const GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY");
+  if (!GEMINI_API_KEY) {
+    throw new Error("GEMINI_API_KEY not configured");
+  }
+
+  const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
+  const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
+
+  const result = await model.generateContent([
+    { text: systemPrompt },
+    { text: userPrompt }
+  ]);
+  const response = await result.response;
+  const text = response.text();
+  
+  const cleanJson = text.replace(/```json|```/g, "").trim();
+  return JSON.parse(cleanJson);
+}
+
+// Call using Lovable AI Gateway (fallback)
+async function callLovableGateway(systemPrompt: string, userPrompt: string): Promise<EvaluationResult> {
+  const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
+  if (!LOVABLE_API_KEY) {
+    throw new Error("LOVABLE_API_KEY not configured");
+  }
+
+  const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${LOVABLE_API_KEY}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      model: "google/gemini-2.5-flash",
+      messages: [
+        { role: "system", content: systemPrompt },
+        { role: "user", content: userPrompt }
+      ],
+    }),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`Lovable Gateway error: ${response.status} - ${errorText}`);
+  }
+
+  const data = await response.json();
+  const text = data.choices?.[0]?.message?.content || "";
+  
+  const cleanJson = text.replace(/```json|```/g, "").trim();
+  return JSON.parse(cleanJson);
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -13,14 +74,6 @@ serve(async (req) => {
 
   try {
     const { userAnswer, riddle, correctAnswer, answerAliases, hint, attemptCount } = await req.json();
-
-    const GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY");
-    if (!GEMINI_API_KEY) {
-      throw new Error("GEMINI_API_KEY is not configured");
-    }
-
-    const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
-    const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
 
     const systemPrompt = `You are the **Chronos Daemon**, a trickster spirit trapped in the machine. You guard the timeline of Moscow. You enjoy watching humans struggle.
 
@@ -54,31 +107,32 @@ ATTEMPT NUMBER: ${attemptCount}
 
 Evaluate if the user's guess matches the Secret Answer or any alias. Remember you are the Chronos Daemon - be cryptic, mocking, and NEVER helpful in a straightforward way.`;
 
-    console.log("Calling Gemini API for answer evaluation...");
-    const result = await model.generateContent([
-      { text: systemPrompt },
-      { text: userPrompt }
-    ]);
-    const response = await result.response;
-    const text = response.text();
-    console.log("Gemini response:", text);
+    let evaluationResult: EvaluationResult;
+    let usedFallback = false;
 
-    // Clean and parse JSON
-    const cleanJson = text.replace(/```json|```/g, "").trim();
-    let evaluationResult: { isCorrect: boolean; isClose: boolean; response: string };
-    
+    // Try Gemini direct first, fallback to Lovable Gateway
     try {
-      evaluationResult = JSON.parse(cleanJson);
-    } catch (parseError) {
-      console.error("Failed to parse Gemini response:", parseError);
-      evaluationResult = {
-        isCorrect: false,
-        isClose: false,
-        response: "The Daemon's mind wanders... Try again, perhaps with a clearer thought.",
-      };
+      console.log("Attempting Gemini API direct call...");
+      evaluationResult = await callGeminiDirect(systemPrompt, userPrompt);
+      console.log("Gemini direct call successful");
+    } catch (geminiError) {
+      console.log("Gemini direct failed, falling back to Lovable Gateway:", geminiError);
+      usedFallback = true;
+      
+      try {
+        evaluationResult = await callLovableGateway(systemPrompt, userPrompt);
+        console.log("Lovable Gateway call successful");
+      } catch (gatewayError) {
+        console.error("Both providers failed:", gatewayError);
+        evaluationResult = {
+          isCorrect: false,
+          isClose: false,
+          response: "The Daemon's mind wanders... Try again, perhaps with a clearer thought.",
+        };
+      }
     }
 
-    return new Response(JSON.stringify(evaluationResult), {
+    return new Response(JSON.stringify({ ...evaluationResult, usedFallback }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (error) {
