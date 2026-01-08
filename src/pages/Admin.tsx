@@ -5,6 +5,7 @@ import { ScanlineOverlay } from '@/components/ScanlineOverlay';
 import { Button } from '@/components/ui/button';
 import { ArrowLeft, Users, Trophy, Clock } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { AdminLogin } from '@/components/admin/AdminLogin';
 
 interface GameSessionData {
   id: string;
@@ -21,11 +22,22 @@ interface GameSessionData {
 const Admin = () => {
   const [sessions, setSessions] = useState<GameSessionData[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
   const navigate = useNavigate();
 
   useEffect(() => {
-    fetchSessions();
+    // Check if already authenticated
+    const token = sessionStorage.getItem('admin_token');
+    if (token) {
+      setIsAuthenticated(true);
+    }
   }, []);
+
+  useEffect(() => {
+    if (isAuthenticated) {
+      fetchSessions();
+    }
+  }, [isAuthenticated]);
 
   const fetchSessions = async () => {
     setIsLoading(true);
@@ -50,6 +62,10 @@ const Admin = () => {
       minute: '2-digit'
     });
   };
+
+  if (!isAuthenticated) {
+    return <AdminLogin onSuccess={() => setIsAuthenticated(true)} />;
+  }
 
   return (
     <div className="min-h-screen bg-background relative overflow-hidden">
