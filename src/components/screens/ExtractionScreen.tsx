@@ -1,43 +1,36 @@
 import { useState, useRef, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
-import { Camera, Check, MapPin, Image, AlertCircle, Unlock, RefreshCw } from 'lucide-react';
+import { Camera, Check, MapPin, Image, AlertCircle, Unlock, RefreshCw, ArrowLeft, Award, SkipForward } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { GlitchText } from '@/components/GlitchText';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
-
-interface Level {
-  id: number;
-  name: string;
-  hint: string;
-  riddle: string;
-  answer: string;
-  verificationKeywords: string[];
-}
+import { Level, EXTRACTION_POINTS, REQUIRED_STABILITY, DECRYPTION_POINTS } from '@/data/levels';
+import { NodeProgress } from '@/components/game/TimelineDashboard';
 
 interface ExtractionScreenProps {
   level: Level;
-  currentLevel: number;
-  totalLevels: number;
-  completedLevels: number[];
+  nodeProgress: Record<number, NodeProgress>;
   onExtracted: () => void;
+  onSkip: () => void;
+  onBack: () => void;
   username: string;
 }
 
 const LOADING_MESSAGES = [
-  "> INITIALIZING UPLINK TO MOSCOW GRID...",
-  "> ENCRYPTING BIOMETRIC DATA...",
-  "> SENDING EVIDENCE TO OPERATOR (mobthomas)...",
+  "> INITIALIZING TEMPORAL SCANNER...",
+  "> ENCRYPTING LOCATION DATA...",
   "> ACTIVATING NANO EYE (GEMINI MODEL)...",
-  "> ANALYZING ARCHITECTURE...",
+  "> ANALYZING ARCHITECTURAL SIGNATURE...",
+  "> CROSS-REFERENCING TIMELINE DATABASE...",
 ];
 
 export const ExtractionScreen = ({ 
   level, 
-  currentLevel, 
-  totalLevels, 
-  completedLevels,
+  nodeProgress,
   onExtracted,
+  onSkip,
+  onBack,
   username 
 }: ExtractionScreenProps) => {
   const [landmarkPhoto, setLandmarkPhoto] = useState<string | null>(null);
@@ -46,11 +39,26 @@ export const ExtractionScreen = ({
   const [aiComment, setAiComment] = useState<string>('');
   const [currentLogIndex, setCurrentLogIndex] = useState(0);
   const [displayedLogs, setDisplayedLogs] = useState<string[]>([]);
+  const [showFieldBonus, setShowFieldBonus] = useState(false);
   const [shake, setShake] = useState(false);
   const landmarkInputRef = useRef<HTMLInputElement>(null);
   const selfieInputRef = useRef<HTMLInputElement>(null);
 
   const isComplete = landmarkPhoto && selfiePhoto && verificationStatus === 'verified';
+
+  // Calculate current points
+  const calculatePoints = (): number => {
+    let points = 0;
+    Object.values(nodeProgress).forEach(progress => {
+      if (progress.decrypted) points += DECRYPTION_POINTS;
+      if (progress.extracted) points += EXTRACTION_POINTS;
+    });
+    // Add the current level's decryption points (since we're in extraction, it's already decrypted)
+    if (!nodeProgress[level.id]?.decrypted) {
+      points += DECRYPTION_POINTS;
+    }
+    return points;
+  };
 
   // Animated loading logs
   useEffect(() => {
@@ -90,7 +98,7 @@ export const ExtractionScreen = ({
         const { data, error } = await supabase.functions.invoke('verify-location', {
           body: { 
             photoBase64, 
-            targetLandmark: level.answer 
+            targetLandmark: level.location 
           }
         });
 
@@ -104,7 +112,8 @@ export const ExtractionScreen = ({
 
         if (isMatch) {
           setVerificationStatus('verified');
-          toast.success('Location verified!');
+          setShowFieldBonus(true);
+          toast.success('Location verified! +' + EXTRACTION_POINTS + ' points');
         } else {
           setVerificationStatus('failed');
           setShake(true);
@@ -114,7 +123,7 @@ export const ExtractionScreen = ({
       } catch (error) {
         console.error('Error calling verify-location:', error);
         setVerificationStatus('failed');
-        setAiComment('Connection to Moscow Grid lost. Try again.');
+        setAiComment('Connection to temporal grid lost. Try again.');
         toast.error('Verification failed - please retry');
       }
     };
@@ -125,6 +134,7 @@ export const ExtractionScreen = ({
     setLandmarkPhoto(null);
     setVerificationStatus('idle');
     setAiComment('');
+    setShowFieldBonus(false);
     landmarkInputRef.current?.click();
   };
 
@@ -151,31 +161,34 @@ export const ExtractionScreen = ({
       shake && "animate-shake"
     )}>
       {/* Header */}
-      <div className="text-center mb-4">
-        <div className="text-xs text-muted-foreground tracking-widest mb-1">
-          TRAVELER: {username.toUpperCase()} | LEVEL {currentLevel}/{totalLevels}
-        </div>
-        <GlitchText as="h1" className="text-xl md:text-2xl glow-text-amber">
-          EXTRACTION PHASE
-        </GlitchText>
+      <div className="flex items-center justify-between mb-4">
+        <Button variant="ghost" size="sm" onClick={onBack} className="text-muted-foreground">
+          <ArrowLeft className="w-4 h-4 mr-1" />
+          DASHBOARD
+        </Button>
+        <Button variant="ghost" size="sm" onClick={onSkip} className="text-muted-foreground">
+          <SkipForward className="w-4 h-4 mr-1" />
+          SKIP (no points)
+        </Button>
       </div>
 
-      {/* Level Progress */}
-      <div className="mb-4">
-        <div className="flex justify-between items-center gap-1 md:gap-2">
-          {Array.from({ length: totalLevels }, (_, i) => i + 1).map((l) => (
-            <div 
-              key={l}
-              className={cn(
-                "flex-1 h-2 rounded-full transition-all duration-500",
-                completedLevels.includes(l) 
-                  ? "bg-accent glow-border-cyan" 
-                  : l === currentLevel 
-                    ? "bg-secondary animate-pulse"
-                    : "bg-muted"
-              )}
-            />
-          ))}
+      <div className="text-center mb-4">
+        <div className="text-xs text-accent tracking-widest mb-1">
+          NODE {level.id} | {level.era}
+        </div>
+        <GlitchText as="h1" className="text-xl md:text-2xl glow-text-amber">
+          {level.name}
+        </GlitchText>
+        <div className="text-xs text-secondary tracking-widest mt-1">
+          EXTRACTION PHASE
+        </div>
+      </div>
+
+      {/* Compact Stability Display */}
+      <div className="terminal-box p-3 mb-4">
+        <div className="flex items-center justify-between text-sm">
+          <span className="text-muted-foreground">Stability</span>
+          <span className="font-mono text-primary">{calculatePoints().toFixed(1)} / {REQUIRED_STABILITY.toFixed(1)}</span>
         </div>
       </div>
 
@@ -187,18 +200,31 @@ export const ExtractionScreen = ({
           </div>
           <div>
             <div className="text-xs text-accent tracking-widest mb-1">
-              DECRYPTED LOCATION
+              TARGET LOCATION
             </div>
-            <h2 className="font-display text-lg text-foreground">
-              {level.answer.toUpperCase()}
+            <h2 className="font-display text-base text-foreground">
+              {level.location.toUpperCase()}
             </h2>
           </div>
         </div>
 
         <p className="text-sm text-muted-foreground">
-          Proceed to the decrypted location and capture proof of your presence to extract the temporal data.
+          Visit this location and capture proof of presence to fully stabilize this temporal node.
         </p>
       </div>
+
+      {/* Field Bonus Reveal */}
+      {showFieldBonus && (
+        <div className="terminal-box p-4 mb-4 border-accent/50 animate-fade-in-up">
+          <div className="flex items-center gap-2 mb-2">
+            <Award className="w-4 h-4 text-accent" />
+            <span className="text-xs text-accent tracking-widest">FIELD BONUS UNLOCKED</span>
+          </div>
+          <p className="text-sm text-accent/90 leading-relaxed">
+            {level.fieldBonus}
+          </p>
+        </div>
+      )}
 
       {/* Verification Tasks */}
       <div className="flex-1 space-y-4">
@@ -239,12 +265,12 @@ export const ExtractionScreen = ({
                 )}
               </div>
               <div>
-                <div className="font-medium">Landmark Photo</div>
+                <div className="font-medium">Location Scan</div>
                 <div className="text-xs text-muted-foreground">
                   {verificationStatus === 'verified' 
-                    ? 'Location verified' 
+                    ? 'Temporal signature confirmed' 
                     : verificationStatus === 'failed'
-                      ? 'Verification failed - retry'
+                      ? 'Scan failed - retry required'
                       : 'Photo of the landmark for AI verification'
                   }
                 </div>
@@ -283,7 +309,7 @@ export const ExtractionScreen = ({
             <div className="relative">
               <img 
                 src={landmarkPhoto} 
-                alt="Landmark" 
+                alt="Location scan" 
                 className={cn(
                   "w-full h-40 object-cover rounded border",
                   verificationStatus === 'verified'
@@ -321,7 +347,7 @@ export const ExtractionScreen = ({
               className="w-full"
             >
               <Camera className="w-4 h-4 mr-2" />
-              CAPTURE LANDMARK
+              SCAN AREA
             </Button>
           )}
 
@@ -333,20 +359,12 @@ export const ExtractionScreen = ({
               className="w-full mt-3"
             >
               <RefreshCw className="w-4 h-4 mr-2" />
-              RETRY CAPTURE
+              RETRY SCAN
             </Button>
           )}
-
-          <div className="mt-3 bg-muted/50 rounded p-2">
-            <div className="text-xs text-primary mb-1">VERIFICATION METHOD:</div>
-            <p className="text-xs text-muted-foreground">
-              Photo analyzed by Nano Eye AI to verify landmark presence. 
-              Clear, recognizable shots of {level.answer} required.
-            </p>
-          </div>
         </div>
 
-        {/* Selfie Verification */}
+        {/* Agent Selfie */}
         <div className={cn(
           "terminal-box p-4 transition-all duration-300",
           selfiePhoto 
@@ -375,9 +393,9 @@ export const ExtractionScreen = ({
                 )}
               </div>
               <div>
-                <div className="font-medium">Temporal Selfie</div>
+                <div className="font-medium">Agent Confirmation</div>
                 <div className="text-xs text-muted-foreground">
-                  {selfiePhoto ? 'Selfie captured' : 'Take a selfie at the location'}
+                  {selfiePhoto ? 'Agent presence logged' : 'Take a selfie to confirm presence'}
                 </div>
               </div>
             </div>
@@ -386,7 +404,7 @@ export const ExtractionScreen = ({
           {selfiePhoto ? (
             <img 
               src={selfiePhoto} 
-              alt="Selfie" 
+              alt="Agent selfie" 
               className="w-full h-40 object-cover rounded border border-accent/50"
             />
           ) : (
@@ -397,7 +415,7 @@ export const ExtractionScreen = ({
               disabled={verificationStatus !== 'verified'}
             >
               <Camera className="w-4 h-4 mr-2" />
-              CAPTURE SELFIE
+              CAPTURE AGENT
             </Button>
           )}
         </div>
@@ -413,7 +431,7 @@ export const ExtractionScreen = ({
             className="w-full animate-pulse-glow bg-accent hover:bg-accent/90 text-accent-foreground"
           >
             <Unlock className="w-5 h-5 mr-2" />
-            LEVEL COMPLETE
+            NODE STABILIZED (+{EXTRACTION_POINTS})
           </Button>
         </div>
       )}
@@ -425,14 +443,14 @@ export const ExtractionScreen = ({
             <AlertCircle className="w-3 h-3" />
             <span>
               {verificationStatus === 'idle' && !landmarkPhoto
-                ? 'AWAITING LANDMARK PHOTO' 
+                ? 'AWAITING LOCATION SCAN' 
                 : verificationStatus === 'verifying'
                   ? 'NANO EYE ANALYZING...'
                   : verificationStatus === 'failed'
-                    ? 'VERIFICATION FAILED - RETRY'
+                    ? 'SCAN FAILED - RETRY REQUIRED'
                     : !selfiePhoto
-                      ? 'AWAITING TEMPORAL SELFIE'
-                      : 'READY TO PROCEED'
+                      ? 'AWAITING AGENT CONFIRMATION'
+                      : 'READY TO STABILIZE'
               }
             </span>
           </div>
