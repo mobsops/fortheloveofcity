@@ -80,13 +80,13 @@ export const PhotoUploadScreen = ({ username, onSubmit }: PhotoUploadScreenProps
             className="hidden"
           />
 
-          {/* Photo Grid - Only 2 slots */}
-          <div className="grid grid-cols-2 gap-4 mb-6">
+          {/* Photo Grid - Responsive: stack on mobile, side-by-side on tablet+ */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
             {[0, 1].map((index) => (
               <div 
                 key={index}
                 className={cn(
-                  "aspect-video rounded border-2 border-dashed relative overflow-hidden transition-all duration-300",
+                  "aspect-[4/3] sm:aspect-video rounded border-2 border-dashed relative overflow-hidden transition-all duration-300",
                   previews[index] 
                     ? "border-primary/50 glow-border-cyan" 
                     : "border-warning/50 hover:border-warning/70"
@@ -101,9 +101,9 @@ export const PhotoUploadScreen = ({ username, onSubmit }: PhotoUploadScreenProps
                     />
                     <button
                       onClick={() => removePhoto(index)}
-                      className="absolute top-2 right-2 w-6 h-6 bg-destructive rounded-full flex items-center justify-center hover:bg-destructive/80 transition-colors"
+                      className="absolute top-2 right-2 w-8 h-8 sm:w-6 sm:h-6 bg-destructive rounded-full flex items-center justify-center hover:bg-destructive/80 transition-colors"
                     >
-                      <X className="w-4 h-4" />
+                      <X className="w-5 h-5 sm:w-4 sm:h-4" />
                     </button>
                     <div className="absolute bottom-2 left-2 text-xs bg-background/80 px-2 py-1 rounded">
                       SCAN_{index + 1}
@@ -111,9 +111,9 @@ export const PhotoUploadScreen = ({ username, onSubmit }: PhotoUploadScreenProps
                   </>
                 ) : (
                   <div className="absolute inset-0 flex flex-col items-center justify-center text-muted-foreground">
-                    <Camera className="w-8 h-8 mb-2 opacity-50" />
-                    <span className="text-xs tracking-wider">REQUIRED</span>
-                    <span className="text-[10px] opacity-60">SLOT_{index + 1}</span>
+                    <Camera className="w-10 h-10 sm:w-8 sm:h-8 mb-2 opacity-50" />
+                    <span className="text-sm sm:text-xs tracking-wider">REQUIRED</span>
+                    <span className="text-xs sm:text-[10px] opacity-60">SLOT_{index + 1}</span>
                   </div>
                 )}
               </div>

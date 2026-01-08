@@ -37,9 +37,9 @@ export const VideoRevealScreen = ({ transformedImages, onConfirm }: VideoRevealS
           </GlitchText>
         </div>
 
-        {/* Image Display Area */}
+        {/* Image Display Area - Responsive aspect ratio */}
         <div className="terminal-box p-2 mb-6">
-          <div className="aspect-video bg-black rounded relative overflow-hidden">
+          <div className="aspect-[3/4] sm:aspect-video bg-black rounded relative overflow-hidden">
             {transformedImages.length > 0 ? (
               <>
                 <img 
