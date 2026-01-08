@@ -1,5 +1,6 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { ScanlineOverlay } from '@/components/ScanlineOverlay';
+import { AudioControl } from '@/components/AudioControl';
 import { UsernameScreen } from '@/components/screens/UsernameScreen';
 import { PhotoUploadScreen } from '@/components/screens/PhotoUploadScreen';
 import { ProcessingScreen } from '@/components/screens/ProcessingScreen';
@@ -8,6 +9,7 @@ import { GameScreen } from '@/components/screens/GameScreen';
 import { CompletionScreen } from '@/components/screens/CompletionScreen';
 import { WelcomeBackScreen } from '@/components/screens/WelcomeBackScreen';
 import { useGameSession } from '@/hooks/useGameSession';
+import { useAudio } from '@/hooks/useAudio';
 
 type GameState = 
   | 'username'
@@ -24,21 +26,25 @@ const Index = () => {
   const [photos, setPhotos] = useState<File[]>([]);
   const [transformedImages, setTransformedImages] = useState<string[]>([]);
   const { session, loadSession, resetSession, setSession } = useGameSession();
+  const { isMuted, play: playAudio, toggleMute } = useAudio();
+
+  // Start audio on first user interaction
+  const handleFirstInteraction = useCallback(() => {
+    playAudio();
+  }, [playAudio]);
 
   const handleUsernameSubmit = async (name: string) => {
+    handleFirstInteraction();
     setUsername(name);
     
     // Check for existing session
     const { isReturning, session: loadedSession } = await loadSession(name);
     
-    if (isReturning && loadedSession && loadedSession.current_level > 1) {
-      // User has made progress - show welcome back screen
-      setGameState('welcome-back');
-    } else if (isReturning && loadedSession && loadedSession.current_level === 1 && loadedSession.current_phase !== 'decryption') {
-      // User started level 1 extraction
+    if (isReturning && loadedSession) {
+      // Any returning user with a session - show welcome back
       setGameState('welcome-back');
     } else {
-      // New user or no progress - start fresh
+      // New user - start fresh
       setGameState('photo-upload');
     }
   };
@@ -82,6 +88,7 @@ const Index = () => {
   return (
     <div className="min-h-screen bg-background relative overflow-hidden">
       <ScanlineOverlay />
+      <AudioControl isMuted={isMuted} onToggle={toggleMute} />
       
       <main className="relative z-10">
         {gameState === 'username' && (
