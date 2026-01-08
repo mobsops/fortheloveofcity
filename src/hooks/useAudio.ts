@@ -1,94 +1,62 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
-
-// Dark ambient drone - works reliably
-const AUDIO_URL = 'https://www.soundjay.com/misc/sounds/magic-chime-01.mp3';
+import { useState, useRef, useCallback, useEffect } from 'react';
 
 export const useAudio = () => {
-  const [isMuted, setIsMuted] = useState(() => {
-    const stored = localStorage.getItem('audio_muted');
-    return stored === 'true';
-  });
+  const [isMuted, setIsMuted] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
-  const [isLoaded, setIsLoaded] = useState(false);
   const audioContextRef = useRef<AudioContext | null>(null);
-  const oscillatorsRef = useRef<OscillatorNode[]>([]);
   const gainNodeRef = useRef<GainNode | null>(null);
 
-  // Create dark ambient drone using Web Audio API
-  const startDrone = useCallback(() => {
-    if (audioContextRef.current || isPlaying) return;
-
-    try {
-      const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
-      audioContextRef.current = audioContext;
-
-      const masterGain = audioContext.createGain();
-      masterGain.gain.value = isMuted ? 0 : 0.15;
-      masterGain.connect(audioContext.destination);
-      gainNodeRef.current = masterGain;
-
-      // Create multiple oscillators for rich drone sound
-      const frequencies = [55, 82.5, 110, 165]; // Low A harmonics
-      
-      frequencies.forEach((freq, i) => {
-        const osc = audioContext.createOscillator();
-        const oscGain = audioContext.createGain();
-        
-        osc.type = i === 0 ? 'sawtooth' : 'sine';
-        osc.frequency.value = freq;
-        
-        // Add slow modulation
-        const lfo = audioContext.createOscillator();
-        const lfoGain = audioContext.createGain();
-        lfo.frequency.value = 0.1 + (i * 0.05);
-        lfoGain.gain.value = freq * 0.02;
-        lfo.connect(lfoGain);
-        lfoGain.connect(osc.frequency);
-        lfo.start();
-        
-        oscGain.gain.value = 0.3 / (i + 1);
-        osc.connect(oscGain);
-        oscGain.connect(masterGain);
-        osc.start();
-        
-        oscillatorsRef.current.push(osc);
-      });
-
-      setIsPlaying(true);
-      setIsLoaded(true);
-      console.log('Audio drone started');
-    } catch (err) {
-      console.error('Audio failed:', err);
-    }
-  }, [isMuted, isPlaying]);
-
+  // Sync mute state with gain
   useEffect(() => {
     if (gainNodeRef.current) {
-      gainNodeRef.current.gain.value = isMuted ? 0 : 0.15;
+      gainNodeRef.current.gain.value = isMuted ? 0 : 0.12;
     }
-    localStorage.setItem('audio_muted', String(isMuted));
   }, [isMuted]);
 
+  // Cleanup on unmount
   useEffect(() => {
     return () => {
-      oscillatorsRef.current.forEach(osc => {
-        try { osc.stop(); } catch (e) {}
-      });
       if (audioContextRef.current) {
-        audioContextRef.current.close();
+        audioContextRef.current.close().catch(() => {});
       }
     };
   }, []);
 
+  const play = useCallback(() => {
+    if (isPlaying || audioContextRef.current) return;
+
+    try {
+      const ctx = new AudioContext();
+      audioContextRef.current = ctx;
+
+      const gain = ctx.createGain();
+      gain.gain.value = 0.12;
+      gain.connect(ctx.destination);
+      gainNodeRef.current = gain;
+
+      // Create dark ambient drone
+      [55, 82.5, 110].forEach((freq, i) => {
+        const osc = ctx.createOscillator();
+        osc.type = i === 0 ? 'sawtooth' : 'sine';
+        osc.frequency.value = freq;
+        
+        const oscGain = ctx.createGain();
+        oscGain.gain.value = 0.2 / (i + 1);
+        
+        osc.connect(oscGain);
+        oscGain.connect(gain);
+        osc.start();
+      });
+
+      setIsPlaying(true);
+    } catch (e) {
+      console.error('Audio error:', e);
+    }
+  }, [isPlaying]);
+
   const toggleMute = useCallback(() => {
-    setIsMuted(prev => !prev);
+    setIsMuted(m => !m);
   }, []);
 
-  return {
-    isMuted,
-    isPlaying,
-    isLoaded,
-    play: startDrone,
-    toggleMute
-  };
+  return { isMuted, isPlaying, play, toggleMute };
 };
