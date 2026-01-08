@@ -61,6 +61,27 @@ export const DecryptionScreen = ({
     scrollToBottom();
   }, [messages]);
 
+  // Strict local validation as fallback
+  const normalizeAnswer = (text: string): string => {
+    return text.toLowerCase().trim().replace(/[^a-z0-9\s]/g, '');
+  };
+
+  const strictLocalCheck = (userInput: string): { isCorrect: boolean; isClose: boolean } => {
+    const normalized = normalizeAnswer(userInput);
+    const correctAnswers = [level.answer, ...level.answerAliases].map(normalizeAnswer);
+    
+    // Must match EXACTLY (not just contain)
+    const isCorrect = correctAnswers.some(answer => normalized === answer);
+    
+    // Check if close (contains part of answer but not generic terms)
+    const genericTerms = ['moscow', 'russia', 'st petersburg', 'saint petersburg', 'city', 'place', 'building'];
+    const isGeneric = genericTerms.some(term => normalized.includes(term));
+    const answerWords = normalizeAnswer(level.answer).split(' ');
+    const isClose = !isGeneric && answerWords.some(word => word.length > 3 && normalized.includes(word));
+    
+    return { isCorrect, isClose };
+  };
+
   const evaluateAnswer = async (userAnswer: string): Promise<{ isCorrect: boolean; isClose: boolean; response: string }> => {
     try {
       const { data, error } = await supabase.functions.invoke('evaluate-answer', {
@@ -79,14 +100,36 @@ export const DecryptionScreen = ({
         throw error;
       }
 
+      // Check for API errors in response
+      if (data?.error) {
+        throw new Error(data.error);
+      }
+
       return data;
     } catch (error) {
-      console.error('Failed to evaluate:', error);
-      // Fallback response
+      console.error('AI unavailable, using local validation:', error);
+      
+      // Fallback to strict local checking
+      const { isCorrect, isClose } = strictLocalCheck(userAnswer);
+      
+      if (isCorrect) {
+        return { isCorrect: true, isClose: false, response: '' };
+      }
+      
+      const hints = [
+        "Think about the metaphors in the riddle. What specific Moscow landmark fits?",
+        "Focus on the key imagery - what place matches these descriptions?",
+        `Hint: ${level.hint}`,
+        "Consider famous Moscow landmarks that tourists visit.",
+        "Read the riddle again slowly. Each word is a clue."
+      ];
+      
       return {
         isCorrect: false,
-        isClose: false,
-        response: "Signal interference... Think about Moscow's most iconic landmarks.",
+        isClose,
+        response: isClose 
+          ? "You're getting warmer... but you need the exact location name."
+          : hints[Math.min(attempts, hints.length - 1)],
       };
     }
   };
