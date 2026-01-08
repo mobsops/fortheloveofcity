@@ -3,39 +3,43 @@ import { DecryptionScreen } from './DecryptionScreen';
 import { ExtractionScreen } from './ExtractionScreen';
 import { TimelineDashboard, NodeProgress } from '@/components/game/TimelineDashboard';
 import { Level, LEVELS } from '@/data/levels';
-import { useGameSession } from '@/hooks/useGameSession';
 
 type GameView = 'dashboard' | 'decryption' | 'extraction';
 
 interface GameScreenProps {
   username: string;
   onComplete: () => void;
-  initialNodeProgress?: Record<number, NodeProgress>;
+  decryptedLevels?: number[];
+  completedLevels?: number[];
+  onSaveDecryption?: (levelId: number) => Promise<boolean>;
+  onSaveExtraction?: (levelId: number) => Promise<boolean>;
 }
 
 export const GameScreen = ({ 
   username, 
   onComplete,
-  initialNodeProgress = {}
+  decryptedLevels = [],
+  completedLevels = [],
+  onSaveDecryption,
+  onSaveExtraction
 }: GameScreenProps) => {
   const [view, setView] = useState<GameView>('dashboard');
   const [activeLevel, setActiveLevel] = useState<Level | null>(null);
-  const [nodeProgress, setNodeProgress] = useState<Record<number, NodeProgress>>(initialNodeProgress);
-  const { updateSession } = useGameSession();
+  const [nodeProgress, setNodeProgress] = useState<Record<number, NodeProgress>>({});
 
-  // Save progress when it changes
+  // Initialize progress from session data
   useEffect(() => {
-    // Convert nodeProgress to the format expected by the session
-    const completedLevels = Object.entries(nodeProgress)
-      .filter(([_, p]) => p.extracted)
-      .map(([id, _]) => parseInt(id));
+    const progress: Record<number, NodeProgress> = {};
     
-    const currentLevel = activeLevel?.id || 1;
-    const currentPhase = view === 'extraction' ? 'extraction' : 'decryption';
+    LEVELS.forEach(level => {
+      progress[level.id] = {
+        decrypted: decryptedLevels.includes(level.id),
+        extracted: completedLevels.includes(level.id)
+      };
+    });
     
-    updateSession(currentLevel, currentPhase, completedLevels);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [nodeProgress, view, activeLevel]);
+    setNodeProgress(progress);
+  }, [decryptedLevels, completedLevels]);
 
   const handleSelectNode = (level: Level) => {
     setActiveLevel(level);
@@ -49,8 +53,16 @@ export const GameScreen = ({
     }
   };
 
-  const handleDecrypted = () => {
+  const handleDecrypted = async () => {
     if (!activeLevel) return;
+    
+    // Save to database first
+    if (onSaveDecryption) {
+      const saved = await onSaveDecryption(activeLevel.id);
+      if (!saved) {
+        console.error('Failed to save decryption progress');
+      }
+    }
     
     setNodeProgress(prev => ({
       ...prev,
@@ -64,8 +76,16 @@ export const GameScreen = ({
     setView('extraction');
   };
 
-  const handleExtracted = () => {
+  const handleExtracted = async () => {
     if (!activeLevel) return;
+    
+    // Save to database first
+    if (onSaveExtraction) {
+      const saved = await onSaveExtraction(activeLevel.id);
+      if (!saved) {
+        console.error('Failed to save extraction progress');
+      }
+    }
     
     setNodeProgress(prev => ({
       ...prev,

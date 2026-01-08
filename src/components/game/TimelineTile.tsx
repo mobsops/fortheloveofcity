@@ -45,12 +45,12 @@ export const TimelineTile = ({ level, status, onClick, disabled }: TimelineTileP
         )}
       </div>
 
-      {/* Era Badge */}
+      {/* Era Badge - Hidden until decrypted */}
       <div className={cn(
         "text-[10px] tracking-widest font-mono mb-2",
         isExtracted ? "text-accent" : isDecrypted ? "text-secondary" : "text-primary"
       )}>
-        {level.era}
+        {(isDecrypted || isExtracted) ? level.era : "████████"}
       </div>
 
       {/* Title */}

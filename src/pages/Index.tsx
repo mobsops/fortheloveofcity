@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useCallback } from 'react';
 import { ScanlineOverlay } from '@/components/ScanlineOverlay';
 import { AudioControl } from '@/components/AudioControl';
 import { UsernameScreen } from '@/components/screens/UsernameScreen';
@@ -25,7 +25,7 @@ const Index = () => {
   const [username, setUsername] = useState('');
   const [photos, setPhotos] = useState<File[]>([]);
   const [transformedImages, setTransformedImages] = useState<string[]>([]);
-  const { session, loadSession, resetSession, setSession } = useGameSession();
+  const { session, loadSession, resetSession, saveDecryption, saveExtraction } = useGameSession();
   const { isMuted, isLoading: audioLoading, play: playAudio, toggleMute } = useAudio();
 
   // Start audio on first user interaction
@@ -100,6 +100,7 @@ const Index = () => {
             username={username}
             currentLevel={session.current_level}
             currentPhase={session.current_phase as 'decryption' | 'extraction'}
+            totalPoints={session.total_points}
             onResume={handleResumeSession}
             onRestart={handleRestartSession}
           />
@@ -130,6 +131,10 @@ const Index = () => {
           <GameScreen 
             username={username} 
             onComplete={handleGameComplete}
+            decryptedLevels={session?.decrypted_levels || []}
+            completedLevels={session?.completed_levels || []}
+            onSaveDecryption={saveDecryption}
+            onSaveExtraction={saveExtraction}
           />
         )}
         

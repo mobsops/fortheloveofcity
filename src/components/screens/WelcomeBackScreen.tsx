@@ -6,6 +6,7 @@ interface WelcomeBackScreenProps {
   username: string;
   currentLevel: number;
   currentPhase: 'decryption' | 'extraction';
+  totalPoints?: number;
   onResume: () => void;
   onRestart: () => void;
 }
@@ -14,6 +15,7 @@ export const WelcomeBackScreen = ({
   username, 
   currentLevel, 
   currentPhase,
+  totalPoints = 0,
   onResume, 
   onRestart 
 }: WelcomeBackScreenProps) => {
@@ -46,16 +48,20 @@ export const WelcomeBackScreen = ({
           
           <div className="space-y-3">
             <div className="flex justify-between items-center py-2 border-b border-primary/20">
-              <span className="text-muted-foreground text-sm">Current Level</span>
-              <span className="text-primary font-mono">{currentLevel} / 7</span>
+              <span className="text-muted-foreground text-sm">Stability Points</span>
+              <span className={`font-mono ${totalPoints >= 4.0 ? 'text-accent' : 'text-primary'}`}>
+                {totalPoints.toFixed(1)} / 4.0
+              </span>
             </div>
             <div className="flex justify-between items-center py-2 border-b border-primary/20">
               <span className="text-muted-foreground text-sm">Current Phase</span>
               <span className="text-secondary font-mono uppercase">{currentPhase}</span>
             </div>
             <div className="flex justify-between items-center py-2">
-              <span className="text-muted-foreground text-sm">Progress</span>
-              <span className="text-accent font-mono">{Math.round(((currentLevel - 1) / 7) * 100)}%</span>
+              <span className="text-muted-foreground text-sm">Mission Status</span>
+              <span className={`font-mono ${totalPoints >= 4.0 ? 'text-accent' : 'text-secondary'}`}>
+                {totalPoints >= 4.0 ? 'COMPLETE' : 'IN PROGRESS'}
+              </span>
             </div>
           </div>
         </div>
