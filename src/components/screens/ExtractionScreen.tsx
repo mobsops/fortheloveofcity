@@ -7,6 +7,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { Level, EXTRACTION_POINTS, REQUIRED_STABILITY, DECRYPTION_POINTS } from '@/data/levels';
 import { NodeProgress } from '@/components/game/TimelineDashboard';
+import { useLanguage } from '@/contexts/LanguageContext';
 
 interface ExtractionScreenProps {
   level: Level;
@@ -33,6 +34,7 @@ export const ExtractionScreen = ({
   onBack,
   username 
 }: ExtractionScreenProps) => {
+  const { t } = useLanguage();
   const [landmarkPhoto, setLandmarkPhoto] = useState<string | null>(null);
   const [selfiePhoto, setSelfiePhoto] = useState<string | null>(null);
   const [verificationStatus, setVerificationStatus] = useState<'idle' | 'verifying' | 'verified' | 'failed'>('idle');
@@ -164,30 +166,30 @@ export const ExtractionScreen = ({
       <div className="flex items-center justify-between mb-4">
         <Button variant="ghost" size="sm" onClick={onBack} className="text-muted-foreground">
           <ArrowLeft className="w-4 h-4 mr-1" />
-          DASHBOARD
+          {t('dashboard')}
         </Button>
         <Button variant="ghost" size="sm" onClick={onSkip} className="text-muted-foreground">
           <SkipForward className="w-4 h-4 mr-1" />
-          SKIP (no points)
+          SKIP
         </Button>
       </div>
 
       <div className="text-center mb-4">
         <div className="text-xs text-accent tracking-widest mb-1">
-          NODE {level.id} | {level.era}
+          {t('node')} {level.id} | {level.era}
         </div>
         <GlitchText as="h1" className="text-xl md:text-2xl glow-text-amber">
           {level.name}
         </GlitchText>
         <div className="text-xs text-secondary tracking-widest mt-1">
-          EXTRACTION PHASE
+          {t('extraction_phase')}
         </div>
       </div>
 
       {/* Compact Stability Display */}
       <div className="terminal-box p-3 mb-4">
         <div className="flex items-center justify-between text-sm">
-          <span className="text-muted-foreground">Stability</span>
+          <span className="text-muted-foreground">{t('stability_meter')}</span>
           <span className="font-mono text-primary">{calculatePoints().toFixed(1)} / {REQUIRED_STABILITY.toFixed(1)}</span>
         </div>
       </div>
@@ -200,7 +202,7 @@ export const ExtractionScreen = ({
           </div>
           <div>
             <div className="text-xs text-accent tracking-widest mb-1">
-              TARGET LOCATION
+              {t('target_location')}
             </div>
             <h2 className="font-display text-base text-foreground">
               {level.location.toUpperCase()}
@@ -209,7 +211,7 @@ export const ExtractionScreen = ({
         </div>
 
         <p className="text-sm text-muted-foreground">
-          Visit this location and capture proof of presence to fully stabilize this temporal node.
+          {t('location_signal')}
         </p>
       </div>
 
@@ -218,7 +220,7 @@ export const ExtractionScreen = ({
         <div className="terminal-box p-4 mb-4 border-accent/50 animate-fade-in-up">
           <div className="flex items-center gap-2 mb-2">
             <Award className="w-4 h-4 text-accent" />
-            <span className="text-xs text-accent tracking-widest">FIELD BONUS UNLOCKED</span>
+            <span className="text-xs text-accent tracking-widest">{t('field_bonus')}</span>
           </div>
           <p className="text-sm text-accent/90 leading-relaxed">
             {level.fieldBonus}
@@ -265,13 +267,13 @@ export const ExtractionScreen = ({
                 )}
               </div>
               <div>
-                <div className="font-medium">Location Scan</div>
+                <div className="font-medium">{t('location_signal')}</div>
                 <div className="text-xs text-muted-foreground">
                   {verificationStatus === 'verified' 
-                    ? 'Temporal signature confirmed' 
+                    ? t('extraction_complete')
                     : verificationStatus === 'failed'
                       ? 'Scan failed - retry required'
-                      : 'Photo of the landmark for AI verification'
+                      : t('scan_area')
                   }
                 </div>
               </div>
@@ -323,14 +325,14 @@ export const ExtractionScreen = ({
                 <div className="absolute inset-0 flex items-center justify-center bg-background/80 rounded">
                   <div className="text-center">
                     <div className="animate-spin w-8 h-8 border-2 border-primary border-t-transparent rounded-full mx-auto mb-2" />
-                    <span className="text-xs text-primary">NANO EYE ACTIVE...</span>
+                    <span className="text-xs text-primary">{t('scanning')}</span>
                   </div>
                 </div>
               )}
               {verificationStatus === 'verified' && (
                 <div className="absolute top-2 right-2 bg-accent/90 text-accent-foreground px-2 py-1 rounded text-xs flex items-center gap-1">
                   <Check className="w-3 h-3" />
-                  VERIFIED
+                  {t('extracted')}
                 </div>
               )}
               {verificationStatus === 'failed' && (
@@ -347,7 +349,7 @@ export const ExtractionScreen = ({
               className="w-full"
             >
               <Camera className="w-4 h-4 mr-2" />
-              SCAN AREA
+              {t('scan_area')}
             </Button>
           )}
 
@@ -359,7 +361,7 @@ export const ExtractionScreen = ({
               className="w-full mt-3"
             >
               <RefreshCw className="w-4 h-4 mr-2" />
-              RETRY SCAN
+              RETRY
             </Button>
           )}
         </div>
@@ -393,9 +395,9 @@ export const ExtractionScreen = ({
                 )}
               </div>
               <div>
-                <div className="font-medium">Agent Confirmation</div>
+                <div className="font-medium">{t('agent')}</div>
                 <div className="text-xs text-muted-foreground">
-                  {selfiePhoto ? 'Agent presence logged' : 'Take a selfie to confirm presence'}
+                  {selfiePhoto ? t('extraction_complete') : t('scan_area')}
                 </div>
               </div>
             </div>
@@ -415,7 +417,7 @@ export const ExtractionScreen = ({
               disabled={verificationStatus !== 'verified'}
             >
               <Camera className="w-4 h-4 mr-2" />
-              CAPTURE AGENT
+              CAPTURE
             </Button>
           )}
         </div>
@@ -431,7 +433,7 @@ export const ExtractionScreen = ({
             className="w-full animate-pulse-glow bg-accent hover:bg-accent/90 text-accent-foreground"
           >
             <Unlock className="w-5 h-5 mr-2" />
-            NODE STABILIZED (+{EXTRACTION_POINTS})
+            {t('extraction_complete')} (+{EXTRACTION_POINTS})
           </Button>
         </div>
       )}
@@ -443,14 +445,14 @@ export const ExtractionScreen = ({
             <AlertCircle className="w-3 h-3" />
             <span>
               {verificationStatus === 'idle' && !landmarkPhoto
-                ? 'AWAITING LOCATION SCAN' 
+                ? t('scan_area')
                 : verificationStatus === 'verifying'
-                  ? 'NANO EYE ANALYZING...'
+                  ? t('scanning')
                   : verificationStatus === 'failed'
-                    ? 'SCAN FAILED - RETRY REQUIRED'
+                    ? 'SCAN FAILED'
                     : !selfiePhoto
-                      ? 'AWAITING AGENT CONFIRMATION'
-                      : 'READY TO STABILIZE'
+                      ? t('agent')
+                      : t('extraction_complete')
               }
             </span>
           </div>

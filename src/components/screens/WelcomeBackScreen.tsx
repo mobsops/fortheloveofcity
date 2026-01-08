@@ -1,6 +1,8 @@
 import { Button } from '@/components/ui/button';
 import { Play, RotateCcw, User } from 'lucide-react';
 import { GlitchText } from '@/components/GlitchText';
+import { LanguageSelector } from '@/components/LanguageSelector';
+import { useLanguage } from '@/contexts/LanguageContext';
 
 interface WelcomeBackScreenProps {
   username: string;
@@ -19,6 +21,8 @@ export const WelcomeBackScreen = ({
   onResume, 
   onRestart 
 }: WelcomeBackScreenProps) => {
+  const { t } = useLanguage();
+  
   return (
     <div className="min-h-screen flex flex-col items-center justify-center p-6">
       <div className="w-full max-w-md text-center">
@@ -28,39 +32,42 @@ export const WelcomeBackScreen = ({
         </div>
 
         {/* Welcome Message */}
-        <div className="mb-8">
+        <div className="mb-6">
           <div className="text-xs text-muted-foreground tracking-widest mb-2">
             TEMPORAL LINK DETECTED
           </div>
           <GlitchText as="h1" className="text-2xl md:text-3xl glow-text-cyan mb-4">
-            WELCOME BACK
+            {t('welcome_back')}
           </GlitchText>
           <h2 className="font-display text-xl text-secondary">
-            AGENT {username.toUpperCase()}
+            {t('agent')} {username.toUpperCase()}
           </h2>
         </div>
+
+        {/* Language Selector */}
+        <LanguageSelector />
 
         {/* Session Info */}
         <div className="terminal-box p-6 mb-8">
           <div className="text-xs text-muted-foreground tracking-widest mb-4">
-            SESSION RECOVERED
+            {t('session_recovered')}
           </div>
           
           <div className="space-y-3">
             <div className="flex justify-between items-center py-2 border-b border-primary/20">
-              <span className="text-muted-foreground text-sm">Stability Points</span>
+              <span className="text-muted-foreground text-sm">{t('points')}</span>
               <span className={`font-mono ${totalPoints >= 4.0 ? 'text-accent' : 'text-primary'}`}>
                 {totalPoints.toFixed(1)} / 4.0
               </span>
             </div>
             <div className="flex justify-between items-center py-2 border-b border-primary/20">
-              <span className="text-muted-foreground text-sm">Current Phase</span>
+              <span className="text-muted-foreground text-sm">{t('status')}</span>
               <span className="text-secondary font-mono uppercase">{currentPhase}</span>
             </div>
             <div className="flex justify-between items-center py-2">
-              <span className="text-muted-foreground text-sm">Mission Status</span>
+              <span className="text-muted-foreground text-sm">{t('progress')}</span>
               <span className={`font-mono ${totalPoints >= 4.0 ? 'text-accent' : 'text-secondary'}`}>
-                {totalPoints >= 4.0 ? 'COMPLETE' : 'IN PROGRESS'}
+                {totalPoints >= 4.0 ? t('complete') : t('in_progress')}
               </span>
             </div>
           </div>
@@ -75,7 +82,7 @@ export const WelcomeBackScreen = ({
             className="w-full animate-pulse-glow"
           >
             <Play className="w-5 h-5 mr-2" />
-            RESUME MISSION
+            {t('continue_mission')}
           </Button>
           
           <Button 
@@ -85,7 +92,7 @@ export const WelcomeBackScreen = ({
             className="w-full border-muted-foreground/30 text-muted-foreground hover:text-foreground"
           >
             <RotateCcw className="w-5 h-5 mr-2" />
-            START NEW MISSION
+            {t('new_session')}
           </Button>
         </div>
 
