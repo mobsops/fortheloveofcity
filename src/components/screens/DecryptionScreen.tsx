@@ -1,9 +1,11 @@
 import { useState, useRef, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Send, Lock, Unlock, HelpCircle, AlertCircle } from 'lucide-react';
+import { Send, Lock, Unlock, HelpCircle, AlertCircle, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { GlitchText } from '@/components/GlitchText';
+import { supabase } from '@/integrations/supabase/client';
+import { toast } from 'sonner';
 
 interface Level {
   id: number;
@@ -11,7 +13,7 @@ interface Level {
   hint: string;
   riddle: string;
   answer: string;
-  answerAliases: string[]; // Accept multiple valid answers
+  answerAliases: string[];
 }
 
 interface ChatMessage {
@@ -48,6 +50,7 @@ export const DecryptionScreen = ({
   const [input, setInput] = useState('');
   const [attempts, setAttempts] = useState(0);
   const [isDecrypted, setIsDecrypted] = useState(false);
+  const [isEvaluating, setIsEvaluating] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const scrollToBottom = () => {
@@ -58,69 +61,67 @@ export const DecryptionScreen = ({
     scrollToBottom();
   }, [messages]);
 
-  const normalizeAnswer = (text: string): string => {
-    return text.toLowerCase().trim().replace(/[^a-z0-9\s]/g, '');
-  };
+  const evaluateAnswer = async (userAnswer: string): Promise<{ isCorrect: boolean; isClose: boolean; response: string }> => {
+    try {
+      const { data, error } = await supabase.functions.invoke('evaluate-answer', {
+        body: {
+          userAnswer,
+          riddle: level.riddle,
+          correctAnswer: level.answer,
+          answerAliases: level.answerAliases,
+          hint: level.hint,
+          attemptCount: attempts + 1,
+        },
+      });
 
-  const checkAnswer = (userInput: string): boolean => {
-    const normalized = normalizeAnswer(userInput);
-    const correctAnswers = [level.answer, ...level.answerAliases].map(normalizeAnswer);
-    return correctAnswers.some(answer => normalized.includes(answer));
-  };
+      if (error) {
+        console.error('Evaluation error:', error);
+        throw error;
+      }
 
-  const generateHintResponse = (userInput: string): string => {
-    const attemptNum = attempts + 1;
-    
-    // Check if answer is close
-    const normalized = normalizeAnswer(userInput);
-    const answerWords = normalizeAnswer(level.answer).split(' ');
-    const hasPartialMatch = answerWords.some(word => normalized.includes(word));
-    
-    if (hasPartialMatch && !checkAnswer(userInput)) {
-      return "You're getting warmer... Think about the riddle more carefully. What specific place fits all the clues?";
+      return data;
+    } catch (error) {
+      console.error('Failed to evaluate:', error);
+      // Fallback response
+      return {
+        isCorrect: false,
+        isClose: false,
+        response: "Signal interference... Think about Moscow's most iconic landmarks.",
+      };
     }
-
-    // Generic hints based on attempts
-    const hints = [
-      "Think about the metaphors in the riddle. What place could match these descriptions?",
-      "Consider the hint I provided. It points to a specific type of location.",
-      "You're on the right track. Focus on landmarks that fit the atmosphere described.",
-      `After ${attemptNum} attempts, here's a nudge: ${level.hint}`,
-      "Remember, each word in the riddle is a clue. Read it again slowly."
-    ];
-
-    return hints[Math.min(attemptNum - 1, hints.length - 1)];
   };
 
-  const handleSubmit = () => {
-    if (!input.trim() || isDecrypted) return;
+  const handleSubmit = async () => {
+    if (!input.trim() || isDecrypted || isEvaluating) return;
 
     const userMessage: ChatMessage = { role: 'user', content: input };
     setMessages(prev => [...prev, userMessage]);
     setAttempts(prev => prev + 1);
+    setInput('');
+    setIsEvaluating(true);
 
-    // Check if answer is correct
-    if (checkAnswer(input)) {
-      setIsDecrypted(true);
-      setTimeout(() => {
+    try {
+      const result = await evaluateAnswer(input);
+
+      if (result.isCorrect) {
+        setIsDecrypted(true);
         setMessages(prev => [...prev, {
           role: 'system',
           content: `✓ CORRECT! Location decrypted: ${level.answer.toUpperCase()}. Proceed to EXTRACTION PHASE to verify your physical presence.`,
           isSuccess: true
         }]);
-      }, 500);
-    } else {
-      // Generate a hint without giving away the answer
-      setTimeout(() => {
+      } else {
         setMessages(prev => [...prev, {
           role: 'system',
-          content: generateHintResponse(input),
-          isHint: true
+          content: result.response,
+          isHint: result.isClose
         }]);
-      }, 800);
+      }
+    } catch (error) {
+      toast.error('Communication error. Try again.');
+    } finally {
+      setIsEvaluating(false);
     }
-
-    setInput('');
   };
 
   const handleProceed = () => {
@@ -227,17 +228,22 @@ export const DecryptionScreen = ({
             <Input
               value={input}
               onChange={(e) => setInput(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && handleSubmit()}
+              onKeyDown={(e) => e.key === 'Enter' && !isEvaluating && handleSubmit()}
               placeholder="Enter your answer..."
               className="flex-1 bg-background/50"
+              disabled={isEvaluating}
             />
             <Button 
               variant="terminal" 
               size="icon"
               onClick={handleSubmit}
-              disabled={!input.trim()}
+              disabled={!input.trim() || isEvaluating}
             >
-              <Send className="w-4 h-4" />
+              {isEvaluating ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <Send className="w-4 h-4" />
+              )}
             </Button>
           </div>
         ) : (
