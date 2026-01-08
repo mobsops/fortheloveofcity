@@ -44,13 +44,13 @@ export const useAudio = () => {
       masterGain.connect(ctx.destination);
       gainNodeRef.current = masterGain;
 
-      // Create dark cinematic drone with multiple layers
+      // Create light ethereal ambient - C major chord with soft textures
       const drones = [
-        { freq: 55, type: 'sawtooth' as OscillatorType, gain: 0.3 },    // Deep bass
-        { freq: 82.5, type: 'sine' as OscillatorType, gain: 0.2 },     // Low harmonic
-        { freq: 110, type: 'sine' as OscillatorType, gain: 0.15 },     // Octave
-        { freq: 165, type: 'triangle' as OscillatorType, gain: 0.1 },  // Fifth
-        { freq: 220, type: 'sine' as OscillatorType, gain: 0.05 },     // High octave
+        { freq: 261.63, type: 'sine' as OscillatorType, gain: 0.15 },     // C4
+        { freq: 329.63, type: 'sine' as OscillatorType, gain: 0.12 },     // E4
+        { freq: 392.00, type: 'sine' as OscillatorType, gain: 0.10 },     // G4
+        { freq: 523.25, type: 'triangle' as OscillatorType, gain: 0.06 }, // C5
+        { freq: 783.99, type: 'sine' as OscillatorType, gain: 0.03 },     // G5 shimmer
       ];
 
       drones.forEach(({ freq, type, gain }) => {
@@ -58,11 +58,11 @@ export const useAudio = () => {
         osc.type = type;
         osc.frequency.value = freq;
 
-        // Add slow LFO for movement
+        // Gentle slow modulation for dreamy feel
         const lfo = ctx.createOscillator();
         const lfoGain = ctx.createGain();
-        lfo.frequency.value = 0.05 + Math.random() * 0.1;
-        lfoGain.gain.value = freq * 0.015;
+        lfo.frequency.value = 0.2 + Math.random() * 0.3;
+        lfoGain.gain.value = freq * 0.008;
         lfo.connect(lfoGain);
         lfoGain.connect(osc.frequency);
         lfo.start();
@@ -76,7 +76,7 @@ export const useAudio = () => {
         oscillatorsRef.current.push(osc);
       });
 
-      // Add filtered noise for atmosphere
+      // Add soft white noise shimmer
       const bufferSize = ctx.sampleRate * 2;
       const noiseBuffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
       const output = noiseBuffer.getChannelData(0);
@@ -89,11 +89,11 @@ export const useAudio = () => {
       noise.loop = true;
       
       const noiseFilter = ctx.createBiquadFilter();
-      noiseFilter.type = 'lowpass';
-      noiseFilter.frequency.value = 200;
+      noiseFilter.type = 'highpass';
+      noiseFilter.frequency.value = 4000;
       
       const noiseGain = ctx.createGain();
-      noiseGain.gain.value = 0.02;
+      noiseGain.gain.value = 0.008;
       
       noise.connect(noiseFilter);
       noiseFilter.connect(noiseGain);
@@ -101,7 +101,7 @@ export const useAudio = () => {
       noise.start();
 
       setIsPlaying(true);
-      console.log('Doomsday ambient started');
+      console.log('Light ambient started');
     } catch (e) {
       console.error('Audio error:', e);
     }
