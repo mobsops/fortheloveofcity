@@ -14,13 +14,18 @@ interface GameSession {
 
 // Generate a unique device ID and store it
 const getDeviceId = (): string => {
-  const key = 'temporal_device_id';
-  let deviceId = localStorage.getItem(key);
-  if (!deviceId) {
-    deviceId = crypto.randomUUID();
-    localStorage.setItem(key, deviceId);
+  try {
+    const key = 'temporal_device_id';
+    let deviceId = localStorage.getItem(key);
+    if (!deviceId) {
+      deviceId = crypto.randomUUID();
+      localStorage.setItem(key, deviceId);
+    }
+    return deviceId;
+  } catch {
+    // Fallback for environments without localStorage
+    return 'fallback-device-id';
   }
-  return deviceId;
 };
 
 export const useGameSession = () => {

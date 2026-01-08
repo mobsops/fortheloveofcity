@@ -1,9 +1,15 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 
-export const useAudio = () => {
-  const [isMuted, setIsMuted] = useState(() => {
+const getInitialMutedState = () => {
+  try {
     return localStorage.getItem('audio_muted') === 'true';
-  });
+  } catch {
+    return false;
+  }
+};
+
+export const useAudio = () => {
+  const [isMuted, setIsMuted] = useState(getInitialMutedState);
   const [isPlaying, setIsPlaying] = useState(false);
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
@@ -12,7 +18,11 @@ export const useAudio = () => {
     if (audioRef.current) {
       audioRef.current.muted = isMuted;
     }
-    localStorage.setItem('audio_muted', String(isMuted));
+    try {
+      localStorage.setItem('audio_muted', String(isMuted));
+    } catch {
+      // Ignore localStorage errors
+    }
   }, [isMuted]);
 
   // Cleanup on unmount

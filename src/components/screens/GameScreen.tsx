@@ -102,9 +102,10 @@ export const GameScreen = ({
 
   const level = LEVELS[currentLevel - 1];
 
-  // Save progress when state changes
+  // Save progress when state changes (excluding updateSession from deps to avoid loops)
   useEffect(() => {
     updateSession(currentLevel, phase, completedLevels);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentLevel, phase, completedLevels]);
 
   const handleDecrypted = () => {
