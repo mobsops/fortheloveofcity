@@ -105,6 +105,7 @@ export const ProcessingScreen = ({ photos, onComplete }: ProcessingScreenProps) 
   // Start on mount
   useEffect(() => {
     startProcessing();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Message progression effect
