@@ -1,150 +1,128 @@
 import { useState, useEffect } from 'react';
 import { DecryptionScreen } from './DecryptionScreen';
 import { ExtractionScreen } from './ExtractionScreen';
+import { TimelineDashboard, NodeProgress } from '@/components/game/TimelineDashboard';
+import { Level, LEVELS } from '@/data/levels';
 import { useGameSession } from '@/hooks/useGameSession';
 
-interface Level {
-  id: number;
-  name: string;
-  hint: string;
-  riddle: string;
-  answer: string;
-  answerAliases: string[];
-  verificationKeywords: string[];
-}
-
-// Moscow-based levels with specific locations
-const LEVELS: Level[] = [
-  { 
-    id: 1, 
-    name: "THE ORIGIN POINT",
-    hint: "Find where the city's heart beats strongest—where red walls touch the sky.",
-    riddle: "I stand where tsars once ruled, my walls painted in blood's own hue. Stars of ruby crown my towers. Find me where history began anew.",
-    answer: "Red Square",
-    answerAliases: ["kremlin", "krasnaya ploshchad", "красная площадь"],
-    verificationKeywords: ["kremlin", "cathedral", "wall"]
-  },
-  { 
-    id: 2, 
-    name: "THE FORGOTTEN ARCHIVE",
-    hint: "Seek the keeper of written memories, where Lenin's name lives on in books.",
-    riddle: "Columns of knowledge rise high, named for a revolutionary's cry. Millions of stories rest in my halls, where silence speaks through ancient walls.",
-    answer: "Lenin Library",
-    answerAliases: ["russian state library", "leninka", "библиотека ленина"],
-    verificationKeywords: ["library", "columns", "entrance"]
-  },
-  { 
-    id: 3, 
-    name: "THE CROSSROADS",
-    hint: "Where millions pass beneath the earth, art adorns the traveler's path.",
-    riddle: "I am a palace underground, where chandeliers illuminate the bound. Art meets function in my design, the most beautiful transit you'll find.",
-    answer: "Komsomolskaya Metro",
-    answerAliases: ["komsomolskaya", "metro station", "метро комсомольская"],
-    verificationKeywords: ["metro", "chandelier", "station"]
-  },
-  { 
-    id: 4, 
-    name: "THE MEMORIAL",
-    hint: "Honor those who fell defending the motherland—victory eternal in stone.",
-    riddle: "I pierce the sky at one hundred and forty-one, honoring battles lost and won. Mother Motherland stands near, where victory echoes year after year.",
-    answer: "Victory Park",
-    answerAliases: ["park pobedy", "poklonnaya hill", "парк победы"],
-    verificationKeywords: ["obelisk", "memorial", "monument"]
-  },
-  { 
-    id: 5, 
-    name: "THE SANCTUARY",
-    hint: "Where souls find peace in painted light—rebuilt from memory and faith.",
-    riddle: "Destroyed then risen from the ground, my golden domes are heaven-bound. The tallest Orthodox in the land, rebuilt by many faithful hands.",
-    answer: "Christ the Savior Cathedral",
-    answerAliases: ["cathedral of christ", "храм христа спасителя"],
-    verificationKeywords: ["cathedral", "dome", "gold"]
-  },
-  { 
-    id: 6, 
-    name: "THE WATCHTOWER",
-    hint: "Elevation reveals perspective—climb where broadcasts touch the stars.",
-    riddle: "Needle of steel I reach for space, the tallest view of Moscow's face. Four hundred meters to the sky, where radio waves and tourists fly.",
-    answer: "Ostankino Tower",
-    answerAliases: ["tv tower", "останкинская башня", "television tower"],
-    verificationKeywords: ["tower", "observation", "tall"]
-  },
-  { 
-    id: 7, 
-    name: "THE NEXUS",
-    hint: "Return to where theater meets elegance—where culture dances through time.",
-    riddle: "Apollo rides above my stage, witness to drama through every age. Ballet and opera fill my halls, where the muse of art forever calls.",
-    answer: "Bolshoi Theatre",
-    answerAliases: ["bolshoi", "большой театр", "big theatre"],
-    verificationKeywords: ["theatre", "columns", "apollo"]
-  },
-];
+type GameView = 'dashboard' | 'decryption' | 'extraction';
 
 interface GameScreenProps {
   username: string;
   onComplete: () => void;
-  initialLevel?: number;
-  initialPhase?: 'decryption' | 'extraction';
-  initialCompletedLevels?: number[];
+  initialNodeProgress?: Record<number, NodeProgress>;
 }
 
 export const GameScreen = ({ 
   username, 
   onComplete,
-  initialLevel = 1,
-  initialPhase = 'decryption',
-  initialCompletedLevels = []
+  initialNodeProgress = {}
 }: GameScreenProps) => {
-  const [currentLevel, setCurrentLevel] = useState(initialLevel);
-  const [phase, setPhase] = useState<'decryption' | 'extraction'>(initialPhase);
-  const [completedLevels, setCompletedLevels] = useState<number[]>(initialCompletedLevels);
+  const [view, setView] = useState<GameView>('dashboard');
+  const [activeLevel, setActiveLevel] = useState<Level | null>(null);
+  const [nodeProgress, setNodeProgress] = useState<Record<number, NodeProgress>>(initialNodeProgress);
   const { updateSession } = useGameSession();
 
-  const level = LEVELS[currentLevel - 1];
-
-  // Save progress when state changes (excluding updateSession from deps to avoid loops)
+  // Save progress when it changes
   useEffect(() => {
-    updateSession(currentLevel, phase, completedLevels);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentLevel, phase, completedLevels]);
-
-  const handleDecrypted = () => {
-    setPhase('extraction');
-  };
-
-  const handleExtracted = () => {
-    const newCompleted = [...completedLevels, currentLevel];
-    setCompletedLevels(newCompleted);
+    // Convert nodeProgress to the format expected by the session
+    const completedLevels = Object.entries(nodeProgress)
+      .filter(([_, p]) => p.extracted)
+      .map(([id, _]) => parseInt(id));
     
-    if (currentLevel < 7) {
-      setCurrentLevel(prev => prev + 1);
-      setPhase('decryption');
-    } else {
-      onComplete();
+    const currentLevel = activeLevel?.id || 1;
+    const currentPhase = view === 'extraction' ? 'extraction' : 'decryption';
+    
+    updateSession(currentLevel, currentPhase, completedLevels);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [nodeProgress, view, activeLevel]);
+
+  const handleSelectNode = (level: Level) => {
+    setActiveLevel(level);
+    const progress = nodeProgress[level.id];
+    
+    // If already decrypted, go straight to extraction
+    if (progress?.decrypted && !progress?.extracted) {
+      setView('extraction');
+    } else if (!progress?.decrypted) {
+      setView('decryption');
     }
   };
 
-  if (phase === 'decryption') {
+  const handleDecrypted = () => {
+    if (!activeLevel) return;
+    
+    setNodeProgress(prev => ({
+      ...prev,
+      [activeLevel.id]: {
+        ...prev[activeLevel.id],
+        decrypted: true,
+        extracted: prev[activeLevel.id]?.extracted || false
+      }
+    }));
+    
+    setView('extraction');
+  };
+
+  const handleExtracted = () => {
+    if (!activeLevel) return;
+    
+    setNodeProgress(prev => ({
+      ...prev,
+      [activeLevel.id]: {
+        ...prev[activeLevel.id],
+        decrypted: true,
+        extracted: true
+      }
+    }));
+    
+    // Return to dashboard after extraction
+    setView('dashboard');
+    setActiveLevel(null);
+  };
+
+  const handleBackToDashboard = () => {
+    setView('dashboard');
+    setActiveLevel(null);
+  };
+
+  const handleSkipExtraction = () => {
+    // Allow user to go back to dashboard without extracting
+    setView('dashboard');
+    setActiveLevel(null);
+  };
+
+  if (view === 'decryption' && activeLevel) {
     return (
       <DecryptionScreen
-        level={level}
-        currentLevel={currentLevel}
-        totalLevels={7}
-        completedLevels={completedLevels}
+        level={activeLevel}
+        nodeProgress={nodeProgress}
         onDecrypted={handleDecrypted}
+        onBack={handleBackToDashboard}
+        username={username}
+      />
+    );
+  }
+
+  if (view === 'extraction' && activeLevel) {
+    return (
+      <ExtractionScreen
+        level={activeLevel}
+        nodeProgress={nodeProgress}
+        onExtracted={handleExtracted}
+        onSkip={handleSkipExtraction}
+        onBack={handleBackToDashboard}
         username={username}
       />
     );
   }
 
   return (
-    <ExtractionScreen
-      level={level}
-      currentLevel={currentLevel}
-      totalLevels={7}
-      completedLevels={completedLevels}
-      onExtracted={handleExtracted}
+    <TimelineDashboard
       username={username}
+      nodeProgress={nodeProgress}
+      onSelectNode={handleSelectNode}
+      onComplete={onComplete}
     />
   );
 };

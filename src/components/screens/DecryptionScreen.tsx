@@ -1,20 +1,14 @@
 import { useState, useRef, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Send, Lock, Unlock, HelpCircle, AlertCircle, Loader2 } from 'lucide-react';
+import { Send, Lock, Unlock, HelpCircle, AlertCircle, Loader2, ArrowLeft, BookOpen } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { GlitchText } from '@/components/GlitchText';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
-
-interface Level {
-  id: number;
-  name: string;
-  hint: string;
-  riddle: string;
-  answer: string;
-  answerAliases: string[];
-}
+import { Level, LEVELS, DECRYPTION_POINTS, EXTRACTION_POINTS, REQUIRED_STABILITY } from '@/data/levels';
+import { NodeProgress } from '@/components/game/TimelineDashboard';
+import { StabilityMeter } from '@/components/game/StabilityMeter';
 
 interface ChatMessage {
   role: 'user' | 'system';
@@ -26,32 +20,41 @@ interface ChatMessage {
 
 interface DecryptionScreenProps {
   level: Level;
-  currentLevel: number;
-  totalLevels: number;
-  completedLevels: number[];
+  nodeProgress: Record<number, NodeProgress>;
   onDecrypted: () => void;
+  onBack: () => void;
   username: string;
 }
 
 export const DecryptionScreen = ({ 
   level, 
-  currentLevel, 
-  totalLevels, 
-  completedLevels,
+  nodeProgress,
   onDecrypted,
+  onBack,
   username 
 }: DecryptionScreenProps) => {
   const [messages, setMessages] = useState<ChatMessage[]>([
     { 
       role: 'system', 
-      content: `AGENT ${username.toUpperCase()}, welcome to DECRYPTION PHASE. Solve the riddle to unlock the location. I cannot reveal the answer directly, but I can help you think.`
+      content: `AGENT ${username.toUpperCase()}, accessing temporal node ${level.id}. Solve the riddle to identify the location signal. I cannot reveal the answer directly, but I can help you think.`
     }
   ]);
   const [input, setInput] = useState('');
   const [attempts, setAttempts] = useState(0);
   const [isDecrypted, setIsDecrypted] = useState(false);
+  const [showStory, setShowStory] = useState(false);
   const [isEvaluating, setIsEvaluating] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  // Calculate current points
+  const calculatePoints = (): number => {
+    let points = 0;
+    Object.values(nodeProgress).forEach(progress => {
+      if (progress.decrypted) points += DECRYPTION_POINTS;
+      if (progress.extracted) points += EXTRACTION_POINTS;
+    });
+    return points;
+  };
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -61,23 +64,24 @@ export const DecryptionScreen = ({
     scrollToBottom();
   }, [messages]);
 
-  // Strict local validation as fallback
+  // Normalize and check answer locally
   const normalizeAnswer = (text: string): string => {
     return text.toLowerCase().trim().replace(/[^a-z0-9\s]/g, '');
   };
 
   const strictLocalCheck = (userInput: string): { isCorrect: boolean; isClose: boolean } => {
     const normalized = normalizeAnswer(userInput);
-    const correctAnswers = [level.answer, ...level.answerAliases].map(normalizeAnswer);
+    const keywords = level.answerKeywords.map(k => k.toLowerCase());
     
-    // Must match EXACTLY (not just contain)
-    const isCorrect = correctAnswers.some(answer => normalized === answer);
+    // Check if any keyword is present in the answer
+    const matchedKeywords = keywords.filter(keyword => normalized.includes(keyword));
+    const isCorrect = matchedKeywords.length >= 1;
     
-    // Check if close (contains part of answer but not generic terms)
-    const genericTerms = ['moscow', 'russia', 'st petersburg', 'saint petersburg', 'city', 'place', 'building'];
-    const isGeneric = genericTerms.some(term => normalized.includes(term));
-    const answerWords = normalizeAnswer(level.answer).split(' ');
-    const isClose = !isGeneric && answerWords.some(word => word.length > 3 && normalized.includes(word));
+    // Check if close (contains part of a keyword)
+    const isClose = !isCorrect && keywords.some(keyword => {
+      const parts = keyword.split(' ');
+      return parts.some(part => part.length > 3 && normalized.includes(part));
+    });
     
     return { isCorrect, isClose };
   };
@@ -88,9 +92,9 @@ export const DecryptionScreen = ({
         body: {
           userAnswer,
           riddle: level.riddle,
-          correctAnswer: level.answer,
-          answerAliases: level.answerAliases,
-          hint: level.hint,
+          correctAnswer: level.location,
+          answerAliases: level.answerKeywords,
+          hint: `Look for: ${level.answerKeywords.join(', ')}`,
           attemptCount: attempts + 1,
         },
       });
@@ -100,7 +104,6 @@ export const DecryptionScreen = ({
         throw error;
       }
 
-      // Check for API errors in response
       if (data?.error) {
         throw new Error(data.error);
       }
@@ -109,7 +112,6 @@ export const DecryptionScreen = ({
     } catch (error) {
       console.error('AI unavailable, using local validation:', error);
       
-      // Fallback to strict local checking
       const { isCorrect, isClose } = strictLocalCheck(userAnswer);
       
       if (isCorrect) {
@@ -117,18 +119,18 @@ export const DecryptionScreen = ({
       }
       
       const hints = [
-        "Think about the metaphors in the riddle. What specific Moscow landmark fits?",
-        "Focus on the key imagery - what place matches these descriptions?",
-        `Hint: ${level.hint}`,
-        "Consider famous Moscow landmarks that tourists visit.",
-        "Read the riddle again slowly. Each word is a clue."
+        "Think about Moscow's historical landmarks. What specific place fits this riddle?",
+        "Focus on the key imagery and time period mentioned.",
+        `This is from the ${level.era} era. What landmark fits?`,
+        "Consider the metaphors carefully. Each word is a clue.",
+        "Read the riddle again slowly. The answer is hidden in the details."
       ];
       
       return {
         isCorrect: false,
         isClose,
         response: isClose 
-          ? "You're getting warmer... but you need the exact location name."
+          ? "You're getting warmer... but I need more precision."
           : hints[Math.min(attempts, hints.length - 1)],
       };
     }
@@ -150,9 +152,10 @@ export const DecryptionScreen = ({
         setIsDecrypted(true);
         setMessages(prev => [...prev, {
           role: 'system',
-          content: `✓ CORRECT! Location decrypted: ${level.answer.toUpperCase()}. Proceed to EXTRACTION PHASE to verify your physical presence.`,
+          content: `✓ SIGNAL IDENTIFIED! Location: ${level.location.toUpperCase()}. +${DECRYPTION_POINTS} stability points earned.`,
           isSuccess: true
         }]);
+        setShowStory(true);
       } else {
         setMessages(prev => [...prev, {
           role: 'system',
@@ -174,73 +177,74 @@ export const DecryptionScreen = ({
   return (
     <div className="min-h-screen flex flex-col p-4 md:p-6">
       {/* Header */}
+      <div className="flex items-center justify-between mb-4">
+        <Button variant="ghost" size="sm" onClick={onBack} className="text-muted-foreground">
+          <ArrowLeft className="w-4 h-4 mr-1" />
+          DASHBOARD
+        </Button>
+        <div className="text-xs text-muted-foreground tracking-widest">
+          AGENT: {username.toUpperCase()}
+        </div>
+      </div>
+
       <div className="text-center mb-4">
-        <div className="text-xs text-muted-foreground tracking-widest mb-1">
-          TRAVELER: {username.toUpperCase()} | LEVEL {currentLevel}/{totalLevels}
+        <div className="text-xs text-secondary tracking-widest mb-1">
+          NODE {level.id} | {level.era}
         </div>
         <GlitchText as="h1" className="text-xl md:text-2xl glow-text-cyan">
-          DECRYPTION PHASE
+          {level.name}
         </GlitchText>
-      </div>
-
-      {/* Level Progress */}
-      <div className="mb-4">
-        <div className="flex justify-between items-center gap-1 md:gap-2">
-          {Array.from({ length: totalLevels }, (_, i) => i + 1).map((l) => (
-            <div 
-              key={l}
-              className={cn(
-                "flex-1 h-2 rounded-full transition-all duration-500",
-                completedLevels.includes(l) 
-                  ? "bg-accent glow-border-cyan" 
-                  : l === currentLevel 
-                    ? "bg-secondary animate-pulse"
-                    : "bg-muted"
-              )}
-            />
-          ))}
+        <div className="text-xs text-primary tracking-widest mt-1">
+          DECRYPTION PHASE
         </div>
       </div>
 
-      {/* Level Info */}
+      {/* Compact Stability Display */}
+      <div className="terminal-box p-3 mb-4">
+        <div className="flex items-center justify-between text-sm">
+          <span className="text-muted-foreground">Stability</span>
+          <span className="font-mono text-primary">{calculatePoints().toFixed(1)} / {REQUIRED_STABILITY.toFixed(1)}</span>
+        </div>
+      </div>
+
+      {/* Riddle */}
       <div className="terminal-box p-4 mb-4">
-        <div className="flex items-center justify-between mb-3">
-          <div>
-            <div className="text-xs text-secondary tracking-widest mb-1">
-              LEVEL {currentLevel}
-            </div>
-            <h2 className="font-display text-lg glow-text-amber">
-              {level.name}
-            </h2>
-          </div>
+        <div className="flex items-center gap-2 mb-2">
           <div className={cn(
-            "w-10 h-10 rounded-full flex items-center justify-center border-2",
-            isDecrypted 
-              ? "border-accent bg-accent/20" 
-              : "border-secondary bg-secondary/10"
+            "w-8 h-8 rounded-full flex items-center justify-center border-2",
+            isDecrypted ? "border-accent bg-accent/20" : "border-secondary bg-secondary/10"
           )}>
             {isDecrypted ? (
-              <Unlock className="w-5 h-5 text-accent" />
+              <Unlock className="w-4 h-4 text-accent" />
             ) : (
-              <Lock className="w-5 h-5 text-secondary" />
+              <Lock className="w-4 h-4 text-secondary" />
             )}
           </div>
-        </div>
-
-        {/* Riddle */}
-        <div className="bg-muted/50 rounded p-3 border border-primary/10">
-          <div className="text-xs text-primary tracking-wider mb-1 flex items-center gap-1">
+          <div className="text-xs text-primary tracking-wider flex items-center gap-1">
             <HelpCircle className="w-3 h-3" />
             THE RIDDLE:
           </div>
-          <p className="text-foreground italic text-sm leading-relaxed">
-            "{level.riddle}"
-          </p>
         </div>
+        <p className="text-foreground italic text-sm leading-relaxed bg-muted/50 rounded p-3 border border-primary/10">
+          "{level.riddle}"
+        </p>
       </div>
 
+      {/* Story Reveal */}
+      {showStory && (
+        <div className="terminal-box p-4 mb-4 border-secondary/50 animate-fade-in-up">
+          <div className="flex items-center gap-2 mb-2">
+            <BookOpen className="w-4 h-4 text-secondary" />
+            <span className="text-xs text-secondary tracking-widest">NARRATIVE LINK UNLOCKED</span>
+          </div>
+          <p className="text-sm text-muted-foreground leading-relaxed">
+            {level.storyDecryption}
+          </p>
+        </div>
+      )}
+
       {/* Chat Area */}
-      <div className="flex-1 terminal-box p-4 flex flex-col min-h-[300px]">
+      <div className="flex-1 terminal-box p-4 flex flex-col min-h-[250px]">
         <div className="flex-1 overflow-y-auto space-y-3 mb-4">
           {messages.map((msg, idx) => (
             <div 
@@ -257,7 +261,7 @@ export const DecryptionScreen = ({
               )}
             >
               {msg.role === 'system' && (
-                <span className="text-xs text-primary block mb-1">SYSTEM:</span>
+                <span className="text-xs text-primary block mb-1">CHRONOS:</span>
               )}
               {msg.content}
             </div>
@@ -296,7 +300,7 @@ export const DecryptionScreen = ({
             className="w-full animate-pulse-glow"
           >
             <Unlock className="w-4 h-4 mr-2" />
-            PROCEED TO EXTRACTION
+            PROCEED TO EXTRACTION (+0.5 on-site)
           </Button>
         )}
       </div>

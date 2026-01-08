@@ -130,9 +130,6 @@ const Index = () => {
           <GameScreen 
             username={username} 
             onComplete={handleGameComplete}
-            initialLevel={session?.current_level || 1}
-            initialPhase={(session?.current_phase as 'decryption' | 'extraction') || 'decryption'}
-            initialCompletedLevels={session?.completed_levels || []}
           />
         )}
         
