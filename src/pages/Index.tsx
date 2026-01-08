@@ -1,6 +1,7 @@
 import { useState, useCallback } from 'react';
 import { ScanlineOverlay } from '@/components/ScanlineOverlay';
 import { AudioControl } from '@/components/AudioControl';
+import { LanguageToggle } from '@/components/LanguageToggle';
 import { UsernameScreen } from '@/components/screens/UsernameScreen';
 import { PhotoUploadScreen } from '@/components/screens/PhotoUploadScreen';
 import { ProcessingScreen } from '@/components/screens/ProcessingScreen';
@@ -89,6 +90,7 @@ const Index = () => {
     <div className="min-h-screen bg-background relative overflow-hidden">
       <ScanlineOverlay />
       <AudioControl isMuted={isMuted} isLoading={audioLoading} onToggle={toggleMute} />
+      <LanguageToggle />
       
       <main className="relative z-10">
         {gameState === 'username' && (
